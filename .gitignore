@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.*
+!.env.example
+.DS_Store
+npm-debug.log*
+.temp
+
+# skills - generated from skills-lock.json, run `npx skills experimental_install` to restore
+.agents/
+.claude/

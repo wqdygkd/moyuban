@@ -1,0 +1,24 @@
+// ============================================================================
+// Element Plus 主题 —— SCSS 编译定制（方案 B）
+// 通过 @forward var.scss with(...) 覆盖主题变量，构建期编译出定制主题。
+// 运行时深色模式仍由 element-plus/theme-chalk/dark/css-vars.css + html.dark 覆盖。
+// ============================================================================
+@forward 'element-plus/theme-chalk/src/common/var.scss' with (
+  $colors: (
+    'white': #ffffff,
+    'black': #000000,
+    'primary': (
+      'base': #fe2c55,
+    ),
+  ),
+  $border-radius: (
+    'base': 8px,
+    'small': 6px,
+    'round': 9999px,
+    'circle': 50%,
+  ),
+  $font-family: (
+    '': "system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif",
+  )
+);
+@use 'element-plus/theme-chalk/src/index.scss' as *;

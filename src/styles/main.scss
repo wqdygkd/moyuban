@@ -1,0 +1,250 @@
+// ============================================================================
+// 全局样式（SCSS）
+// Element Plus 主题色/圆角/字体由 src/styles/element/index.scss 于构建期编译生成。
+// 本文件负责：业务语义 token（--color-*）、深色模式品牌/页面 palette、基础布局样式。
+// ============================================================================
+
+@use './common';
+
+/* ============================================================================
+   主题系统：四套平台风格（源：CreatorHub #comments 的设计 token）
+   抖音 theme-douyin（暗色·招牌红 #FE2C55 + 青 #25F4EE，默认）
+   小红书 theme-xhs（浅色暖调·招牌红 #FF2442）
+   快手 theme-kuaishou（暗色·招牌橙 #FF7902）
+   视频号 theme-shipinhao（暗色·微信绿 #07C160）
+   通过 <body class="theme-*"> 切换；Element Plus 品牌色经运行时 --el-* 变量覆盖。
+   ============================================================================ */
+
+:root {
+  /* ---------- 结构 token（各主题共享不定值） ---------- */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-card: 12px;
+  --radius-full: 9999px;
+  --ui-header-height: 64px;
+  --ui-container: 1280px;
+  --ui-aside-width: 212px;
+  --ui-admin-max: 1080px;
+  --color-overlay: 0 0 0;
+
+  /* ---------- 间距尺度（1 单位 = 4px） ---------- */
+  --space-hair: 6px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-9: 40px;
+  --space-10: 48px;
+
+  /* ---------- 字号阶梯 ---------- */
+  --text-xxs: 0.75rem;
+  --text-foot: 0.8125rem;
+  --text-sm: 0.85rem;
+  --text-md: 0.95rem;
+  --text-lg: 1.15rem;
+  --text-xl: 1.3rem;
+  --text-brand: 1.125rem;
+
+  /* ---------- Element Plus 圆角（共享结构） ---------- */
+  --el-border-radius-base: 8px;
+  --el-border-radius-small: 6px;
+  --el-border-radius-round: 9999px;
+
+  /* ---------- 共享暗色表面 token（默认 = 抖音；快手/视频号沿用，小红书浅色覆盖） ---------- */
+  --color-bg: 11 15 22; /* #0b0f16 */
+  --color-bg-card: 18 22 30; /* #12161e */
+  --color-bg-card-hover: 24 29 39; /* #181d27 */
+  --color-border: 42 51 65; /* #2a3341 */
+  --color-text: 231 234 240; /* #e7eaf0 */
+  --color-text-secondary: 139 148 163; /* #8b94a3 */
+  --color-text-muted: 119 128 148; /* #778094 */
+  --color-hot: 255 77 79;
+  --aside-bg: 16 20 30;
+  --aside-text: 203 210 226;
+  --aside-hover: rgba(255, 255, 255, 0.08);
+  --aside-divider: rgba(255, 255, 255, 0.1);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  --shadow-pop: 0 2px 10px rgba(0, 0, 0, 0.4);
+  --shadow-float: 0 6px 18px rgba(0, 0, 0, 0.35);
+
+  /* ---------- 派生别名与品牌派生（引用 --color-primary，随主题自动变化） ---------- */
+  --color-primary: 254 44 85; /* #FE2C55 默认 */
+  --color-primary-deep: 231 25 62;
+  --color-border-active: rgb(var(--color-primary));
+  --bg-primary-soft: rgb(var(--color-primary) / 0.14);
+  --bg-primary-active: rgb(var(--color-primary) / 0.16);
+  --page-bg: rgb(var(--color-bg));
+  --card-bg: rgb(var(--color-bg-card));
+  --text-main: rgb(var(--color-text));
+  --text-sub: rgb(var(--color-text-secondary));
+  --border-soft: rgb(var(--color-border));
+  --shadow-brand-sm: 0 2px 8px rgb(var(--color-primary) / 0.35);
+  --shadow-brand-md: 0 4px 12px rgb(var(--color-primary) / 0.35);
+  --shadow-brand-hover: 0 8px 22px rgb(var(--color-primary) / 0.14);
+  --shadow-header: 0 1px 4px rgb(var(--color-primary) / 0.1);
+  --shadow-dialog: 0 10px 40px rgb(var(--color-primary) / 0.12);
+  --ring-focus: 0 0 0 4px rgb(var(--color-primary) / 0.2);
+}
+
+/* ---------- 抖音（默认暗色；--el-* 盖过 EP dark css-vars 的 html.dark 默认蓝） ---------- */
+body.theme-douyin {
+  --color-primary: 254 44 85;
+  --color-primary-deep: 231 25 62;
+  --grad-brand: linear-gradient(135deg, #fe2c55, #25f4ee);
+
+  --el-color-primary: #fe2c55;
+  --el-color-primary-light-3: #ff506f;
+  --el-color-primary-light-5: #ff728a;
+  --el-color-primary-light-7: #ffa1b0;
+  --el-color-primary-light-8: #ffb7c3;
+  --el-color-primary-light-9: #ffd9df;
+  --el-color-primary-dark-2: #e52041;
+}
+
+/* ---------- 小红书：浅色暖调（唯一浅色主题；关掉 html.dark） ---------- */
+body.theme-xhs {
+  --color-primary: 255 36 66; /* #FF2442 */
+  --color-primary-deep: 232 16 47;
+  --color-bg: 251 243 241; /* #fbf3f1 */
+  --color-bg-card: 255 255 255;
+  --color-bg-card-hover: 253 244 242; /* #fdf4f2 */
+  --color-border: 242 221 215; /* #f2ddd7 */
+  --color-border-active: 255 36 66;
+  --color-text: 43 34 38; /* #2b2226 */
+  --color-text-secondary: 110 94 98; /* #6e5e62 */
+  --color-text-muted: 128 111 115; /* #806f73 */
+  --color-hot: 225 29 72;
+  --grad-brand: linear-gradient(135deg, #ff2442, #ff5a7a);
+  --bg-primary-soft: rgb(var(--color-primary) / 0.1);
+  --bg-primary-active: rgb(var(--color-primary) / 0.12);
+  --page-bg: rgb(var(--color-bg));
+  --card-bg: rgb(var(--color-bg-card));
+  --text-main: rgb(var(--color-text));
+  --text-sub: rgb(var(--color-text-secondary));
+  --border-soft: rgb(var(--color-border));
+  --aside-bg: 24 16 18;
+  --aside-text: 240 225 226;
+  --aside-hover: rgba(255, 255, 255, 0.08);
+  --aside-divider: rgba(255, 255, 255, 0.12);
+  --shadow-card: 0 1px 2px rgba(190, 90, 100, 0.08);
+  --shadow-pop: 0 2px 10px rgba(190, 90, 100, 0.14);
+  --shadow-float: 0 6px 18px rgba(190, 90, 100, 0.18);
+  --shadow-brand-hover: 0 8px 22px rgb(var(--color-primary) / 0.12);
+  --ring-focus: 0 0 0 4px rgb(var(--color-primary) / 0.18);
+
+  --el-color-primary: #ff2442;
+  --el-color-primary-light-3: #ff4d63;
+  --el-color-primary-light-5: #ff7888;
+  --el-color-primary-light-7: #ffaeb8;
+  --el-color-primary-light-8: #ffc6cd;
+  --el-color-primary-light-9: #ffe6e9;
+  --el-color-primary-dark-2: #e01030;
+}
+
+/* ---------- 快手：暗色 + 招牌橙（仅覆盖主色，其余继承 :root 暗色基座） ---------- */
+body.theme-kuaishou {
+  --color-primary: 255 121 2;
+  --color-primary-deep: 232 105 0;
+  --color-border-active: 255 121 2;
+  --grad-brand: linear-gradient(135deg, #ff7902, #ffb04d);
+  --el-color-primary: #ff7902;
+  --el-color-primary-light-3: #ff9a3a;
+  --el-color-primary-light-5: #ffb265;
+  --el-color-primary-light-7: #ffd0a0;
+  --el-color-primary-light-8: #ffddbb;
+  --el-color-primary-light-9: #fff0e0;
+  --el-color-primary-dark-2: #dc6700;
+}
+
+/* ---------- 视频号：暗色 + 微信绿（仅覆盖主色） ---------- */
+body.theme-shipinhao {
+  --color-primary: 7 193 96;
+  --color-primary-deep: 0 166 79;
+  --color-border-active: 7 193 96;
+  --grad-brand: linear-gradient(135deg, #07c160, #4fd68f);
+  --el-color-primary: #07c160;
+  --el-color-primary-light-3: #35c97d;
+  --el-color-primary-light-5: #60d49b;
+  --el-color-primary-light-7: #99e4bf;
+  --el-color-primary-light-8: #b6eccf;
+  --el-color-primary-light-9: #e2f8ec;
+  --el-color-primary-dark-2: #05a352;
+}
+
+body {
+  font-family: var(--el-font-family);
+  background-color: var(--page-bg);
+  background-image:
+    radial-gradient(1000px 520px at 80% -8%, rgb(var(--color-primary) / 0.1), transparent 60%),
+    radial-gradient(
+      900px 460px at 8% 110%,
+      color-mix(in srgb, rgb(var(--color-primary)) 45%, var(--page-bg) 55%),
+      transparent 62%
+    );
+  background-repeat: no-repeat;
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 全局噪点纹理 */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  pointer-events: none;
+  opacity: 0.045;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+#app {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.container {
+  width: 100%;
+  max-width: var(--ui-container);
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--color-border-active));
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}

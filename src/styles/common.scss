@@ -1,0 +1,122 @@
+// ============================================================================
+// 公共组件/布局样式（业务层可复用）
+// 仅供业务组件复用，不进入第三方组件源码。依赖 :root 中的 --color-* 等 token。
+// 单行注释使用这种方式，避免块注释内出现闭合冒号序列。
+// ============================================================================
+
+/* ---------- 页面容器 ---------- */
+.ui-page {
+  width: 100%;
+  max-width: var(--ui-admin-max);
+  margin: 0 auto;
+}
+.ui-page--wide {
+  max-width: 1400px;
+}
+
+/* ---------- 面板/卡片容器 ---------- */
+.ui-panel,
+.table-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+/* ---------- 管理页工具栏 ---------- */
+.tb-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+.tb-toolbar--between {
+  justify-content: space-between;
+}
+.tb-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: 0.01em;
+}
+.tb-search {
+  width: 240px;
+}
+.tb-select {
+  width: 180px;
+}
+.tb-right {
+  margin-left: auto;
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* ---------- 表格容器 ---------- */
+.table-card {
+  overflow: hidden;
+  padding: 2px var(--space-hair);
+}
+.table-card .el-table {
+  --el-table-header-bg-color: rgb(var(--color-bg-card-hover));
+  --el-table-tr-bg-color: transparent;
+  --el-table-row-hover-bg-color: rgb(var(--color-bg-card-hover));
+  background: transparent;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 小标签 ---------- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-xs);
+  font-size: var(--text-xxs);
+  line-height: 1.6;
+  background: rgb(var(--color-bg-card-hover));
+  color: var(--text-sub);
+  font-variant-numeric: tabular-nums;
+}
+.chip + .chip {
+  margin-left: var(--space-1);
+}
+.chip--primary {
+  background: var(--bg-primary-active);
+  color: rgb(var(--color-primary));
+}
+
+/* ---------- 单行省略 ---------- */
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 主题切换器（el-dropdown 渲染到 body，需全局） ---------- */
+.theme-dropdown-item.theme-active {
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+.theme-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: -1px;
+  border: 1px solid rgb(var(--color-border));
+}
+.dot-douyin {
+  background: linear-gradient(135deg, #25f4ee, #fe2c55);
+}
+.dot-xhs {
+  background: #ff2442;
+}
+.dot-kuaishou {
+  background: #ff7902;
+}
+.dot-shipinhao {
+  background: #07c160;
+}

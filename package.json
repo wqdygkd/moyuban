@@ -1,0 +1,44 @@
+{
+  "name": "moyuban",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "description": "基于 Vue 3 + Element Plus + Supabase 的网址导航网站，支持分类导航、搜索及后台维护（RLS 权限控制）",
+  "author": "wqdygkd",
+  "license": "MIT",
+  "homepage": "https://github.com/wqdygkd/moyuban#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wqdygkd/moyuban"
+  },
+  "keywords": [
+    "vue3",
+    "vite",
+    "element-plus",
+    "supabase",
+    "navigation",
+    "moyuban"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.1",
+    "@supabase/supabase-js": "^2.45.0",
+    "element-plus": "^2.8.0",
+    "vue": "^3.5.42",
+    "vue-router": "^5.3.0"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^9.3.0",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "eslint": "^10.9.1",
+    "eslint-plugin-format": "^2.0.1",
+    "sass-embedded": "^1.103.1",
+    "vite": "^8.2.2"
+  }
+}

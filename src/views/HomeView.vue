@@ -1,8 +1,8 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import SiteCard from '@/components/SiteCard.vue'
-import { categoryApi, siteApi, subcategoryApi } from '@/services/api'
-import { readHomeCache, writeHomeCache } from '@/utils/cache'
+import { fetchCategories, fetchHomeData, fetchSites, fetchSubcategories, metaApi } from '@/services/api'
+import { readHomeCache, readVersions, writeHomeCache, writeVersions } from '@/utils/cache'
 
 const loading = ref(true)
 const error = ref('')
@@ -29,7 +29,7 @@ function applyCache(c) {
   categories.value = c.categories || []
   subcategories.value = c.subcategories || []
   sites.value = c.sites || []
-  featured.value = c.featured || []
+  featured.value = c.featured || (c.sites || []).filter(s => s.is_featured)
   return true
 }
 // 同步尝试读取本地缓存，秒开不白屏
@@ -138,21 +138,52 @@ async function setupReveal() {
   document.querySelectorAll('.category-section').forEach(el => revealIo.observe(el))
 }
 
-// ---------- 数据加载（stale-while-revalidate：有缓存时静默刷新） ----------
-async function loadData({ silent = false } = {}) {
-  const hasCache = !!readHomeCache()
-  // 有缓存则静默刷新，不展示 loading / 不清空 error 的白屏
+async function loadData({ silent = false, force = false } = {}) {
+  const cached = readHomeCache()
+  const hasCache = !!cached
   if (!silent && !hasCache) loading.value = true
   if (!silent) error.value = ''
   try {
-    const [cats, subs, allSites, feat] = await Promise.all([categoryApi.list(), subcategoryApi.list(), siteApi.list(), siteApi.listFeatured()])
-    const next = { categories: cats, subcategories: subs, sites: allSites, featured: feat }
+    if (!force && hasCache) {
+      try {
+        const remote = await metaApi.getVersions()
+        const remoteVers = { categories: remote.cat, subcategories: remote.sub, sites: remote.site }
+        const localVers = cached.versions ?? readVersions()
+        if (localVers && remoteVers.categories === localVers.categories && remoteVers.subcategories === localVers.subcategories && remoteVers.sites === localVers.sites) {
+          // ponytail: 三表均命中则零全量
+          return
+        }
+        const needCats = !localVers || localVers.categories !== remoteVers.categories
+        const needSubs = !localVers || localVers.subcategories !== remoteVers.subcategories
+        const needSites = !localVers || localVers.sites !== remoteVers.sites
+        const [cats, subs, sites] = await Promise.all([
+          needCats ? fetchCategories() : Promise.resolve(cached.categories),
+          needSubs ? fetchSubcategories() : Promise.resolve(cached.subcategories),
+          needSites ? fetchSites() : Promise.resolve(cached.sites),
+        ])
+        const featured = (needSites ? sites : cached.sites ?? sites).filter(s => s.is_featured)
+        const next = { categories: cats, subcategories: subs, sites, featured, versions: remoteVers }
+        applyCache(next)
+        writeHomeCache(next)
+        writeVersions(remoteVers)
+        error.value = ''
+        return
+      } catch (e) {
+        console.warn('[cache] 版本探测失败，回退全量', e)
+      }
+    }
+    const data = await fetchHomeData()
+    let remoteVers = null
+    try {
+      const r = await metaApi.getVersions()
+      remoteVers = { categories: r.cat, subcategories: r.sub, sites: r.site }
+    } catch {}
+    const next = { ...data, versions: remoteVers ?? cached?.versions ?? undefined }
     applyCache(next)
     writeHomeCache(next)
-    // 有缓存但接口失败会走到 catch，这里只有成功才清 error
+    if (remoteVers) writeVersions(remoteVers)
     error.value = ''
   } catch (e) {
-    // 有缓存时静默失败，不覆盖页面，保留本地数据
     if (!hasCache) error.value = e.message || '加载失败，请检查 Supabase 配置是否完成'
     else console.warn('[cache] 后台刷新失败，继续使用本地缓存', e)
   } finally {
@@ -250,7 +281,7 @@ onBeforeUnmount(() => {
 
     <el-skeleton v-if="loading" :rows="8" animated class="skeleton" />
     <el-empty v-else-if="error" :description="error">
-      <el-button type="primary" @click="loadData">
+      <el-button type="primary" @click="loadData({ force: true })">
         重新加载
       </el-button>
     </el-empty>

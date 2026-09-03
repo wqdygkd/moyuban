@@ -70,13 +70,19 @@ alter table public.subcategories  enable row level security;
 alter table public.sites          enable row level security;
 
 -- 所有人可读
+drop policy if exists "public read categories" on public.categories;
 create policy "public read categories"    on public.categories    for select using (true);
+drop policy if exists "public read subcategories" on public.subcategories;
 create policy "public read subcategories" on public.subcategories for select using (true);
+drop policy if exists "public read sites" on public.sites;
 create policy "public read sites"         on public.sites         for select using (true);
 
 -- 仅登录用户可写
+drop policy if exists "auth write categories" on public.categories;
 create policy "auth write categories"    on public.categories    for all to authenticated using (true) with check (true);
+drop policy if exists "auth write subcategories" on public.subcategories;
 create policy "auth write subcategories" on public.subcategories for all to authenticated using (true) with check (true);
+drop policy if exists "auth write sites" on public.sites;
 create policy "auth write sites"         on public.sites         for all to authenticated using (true) with check (true);
 
 -- ------------------------------------------------------------
@@ -113,3 +119,76 @@ drop trigger if exists trg_sites_updated_at on public.sites;
 create trigger trg_sites_updated_at
   before update on public.sites
   for each row execute function public.set_updated_at();
+
+-- ------------------------------------------------------------
+-- 数据版本号 app_meta（前台缓存脏检查）
+-- 单行 id=1，三列独立短列名：cat/sub/site，前台一次查三版本，按表按需拉取
+-- 列名精简以进一步减少响应大小（~35B vs ~80B）
+-- ------------------------------------------------------------
+create table if not exists public.app_meta (
+  id          int primary key,
+  cat         bigint not null default 1,
+  sub         bigint not null default 1,
+  site        bigint not null default 1,
+  updated_at  timestamptz not null default now()
+);
+insert into public.app_meta(id, cat, sub, site) values (1, 1, 1, 1) on conflict (id) do nothing;
+
+alter table public.app_meta enable row level security;
+drop policy if exists "public read app_meta" on public.app_meta;
+create policy "public read app_meta" on public.app_meta for select using (true);
+grant select on public.app_meta to anon, authenticated;
+
+create or replace function public.bump_categories_version()
+returns trigger language plpgsql as $$
+begin
+  update public.app_meta set cat = cat + 1, updated_at = now() where id = 1;
+  return null;
+end $$;
+create or replace function public.bump_subcategories_version()
+returns trigger language plpgsql as $$
+begin
+  update public.app_meta set sub = sub + 1, updated_at = now() where id = 1;
+  return null;
+end $$;
+create or replace function public.bump_sites_version()
+returns trigger language plpgsql as $$
+begin
+  update public.app_meta set site = site + 1, updated_at = now() where id = 1;
+  return null;
+end $$;
+
+drop trigger if exists trg_bump_on_categories on public.categories;
+create trigger trg_bump_on_categories after insert or update or delete on public.categories
+  for each statement execute function public.bump_categories_version();
+drop trigger if exists trg_bump_on_subcategories on public.subcategories;
+create trigger trg_bump_on_subcategories after insert or update or delete on public.subcategories
+  for each statement execute function public.bump_subcategories_version();
+drop trigger if exists trg_bump_on_sites on public.sites;
+-- 仅维护字段变更才 bump，click_count/updated_at 不触发以免每次点击都致缓存失效
+create trigger trg_bump_on_sites after insert or delete on public.sites
+  for each statement execute function public.bump_sites_version();
+drop trigger if exists trg_bump_on_sites_upd on public.sites;
+create trigger trg_bump_on_sites_upd after update of subcategory_id, name, url, description, favicon_url, image_url, is_hot, is_new, is_featured, sort_order, is_active on public.sites
+  for each statement execute function public.bump_sites_version();
+
+-- ------------------------------------------------------------
+-- Realtime（Q5 零轮询）：发布三表以支持 postgres_changes 推送
+-- ------------------------------------------------------------
+-- alter table public.categories replica identity full;
+-- alter table public.subcategories replica identity full;
+-- alter table public.sites replica identity full;
+-- do $$ begin
+--   begin
+--     alter publication supabase_realtime add table public.categories;
+--   exception when duplicate_object then null;
+--   end;
+--   begin
+--     alter publication supabase_realtime add table public.subcategories;
+--   exception when duplicate_object then null;
+--   end;
+--   begin
+--     alter publication supabase_realtime add table public.sites;
+--   exception when duplicate_object then null;
+--   end;
+-- end $$;

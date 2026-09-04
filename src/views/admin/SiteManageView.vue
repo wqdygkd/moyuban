@@ -1,9 +1,10 @@
 <script setup>
-import { Search } from '@element-plus/icons-vue'
+import { Plus, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { usePagination } from '@/composables/use-admin-table'
+import FaviconImg from '@/components/FaviconImg.vue'
 import { categoryApi, siteApi, subcategoryApi } from '@/services/api'
+import { getFaviconCandidates, getFaviconSource } from '@/utils/favicon'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -12,8 +13,16 @@ const filterCategory = ref('')
 const categories = ref([])
 const subcategories = ref([])
 const sites = ref([])
+const total = ref(0)
+const page = ref(1)
+const pageSize = ref(10)
+const selected = ref([])
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 const dialogVisible = ref(false)
 const formRef = ref()
+function onSelectionChange(rows) {
+  selected.value = rows
+}
 function defaultForm() {
   return {
     id: null,
@@ -59,44 +68,70 @@ function catOf(subId) {
 function subOf(subId) {
   return subMap.value.get(subId)?.name || '-'
 }
-function faviconOf(row) {
-  try {
-    return `https://www.google.com/s2/favicons?domain=${new URL(row.favicon_url || row.url).hostname}&sz=64`
-  } catch {
-    return ''
-  }
+function faviconCandidates(row) {
+  if (row.image_url) return []
+  return getFaviconCandidates({ url: row.url, favicon_url: row.favicon_url })
+}
+const hostCandidates = computed(() => getFaviconCandidates({ url: form.url }))
+const previewCandidates = computed(() => getFaviconCandidates({ url: form.url, favicon_url: form.favicon_url }))
+
+async function loadMeta() {
+  const [cats, subs] = await Promise.all([categoryApi.list(), subcategoryApi.list()])
+  categories.value = cats
+  subcategories.value = subs
 }
 
-const filteredSites = computed(() => {
-  let list = sites.value
-  if (filterCategory.value) {
-    const ids = new Set(subcategories.value.filter(s => s.category_id === filterCategory.value).map(s => s.id))
-    list = list.filter(s => ids.has(s.subcategory_id))
-  }
-  if (keyword.value) {
-    const k = keyword.value.toLowerCase()
-    list = list.filter(s => s.name.toLowerCase().includes(k) || (s.description || '').toLowerCase().includes(k))
-  }
-  return list
-})
-const { page, pageSize, paged, selected, onSelectionChange } = usePagination(filteredSites)
-watch([keyword, filterCategory], () => {
-  page.value = 1
-})
-
-async function loadData() {
+async function fetchPaged() {
   loading.value = true
   try {
-    const [cats, subs, data] = await Promise.all([categoryApi.list(), subcategoryApi.list(), siteApi.list()])
-    categories.value = cats
-    subcategories.value = subs
+    let subcategoryIds = null
+    if (filterCategory.value) {
+      subcategoryIds = subcategories.value.filter(s => s.category_id === filterCategory.value).map(s => s.id)
+      if (!subcategoryIds.length) {
+        sites.value = []
+        total.value = 0
+        return
+      }
+    }
+    const { data, total: t } = await siteApi.listPaged({ page: page.value, pageSize: pageSize.value, keyword: keyword.value.trim(), subcategoryIds })
     sites.value = data
+    total.value = t
+    if (page.value > totalPages.value) page.value = totalPages.value
   } catch (e) {
     ElMessage.error(e.message || '加载失败')
   } finally {
     loading.value = false
   }
 }
+
+async function loadData() {
+  try {
+    await loadMeta()
+    page.value = 1
+    await fetchPaged()
+  } catch (e) {
+    ElMessage.error(e.message || '加载失败')
+  }
+}
+
+// 搜索/筛选防抖，避免每键一次请求；page/pageSize 变更直接拉取
+let searchTimer = null
+watch(keyword, () => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    if (page.value === 1) fetchPaged()
+    else page.value = 1
+  }, 300)
+})
+watch(filterCategory, () => {
+  if (page.value === 1) fetchPaged()
+  else page.value = 1
+})
+watch(pageSize, () => {
+  if (page.value === 1) fetchPaged()
+  else page.value = 1
+})
+watch(page, fetchPaged)
 function openDialog(row) {
   Object.assign(form, defaultForm())
   if (row) Object.assign(form, { ...row, category_id: subMap.value.get(row.subcategory_id)?.category_id || '' })
@@ -111,12 +146,18 @@ async function save() {
   saving.value = true
   try {
     const { id, ...payload } = form
+    const isCreate = !id
     delete payload.category_id
     if (id) await siteApi.update(id, payload)
     else await siteApi.create(payload)
     ElMessage.success(id ? '更新成功' : '新增成功')
     dialogVisible.value = false
-    await loadData()
+    if (isCreate) {
+      page.value = 1
+      if (page.value === 1) await fetchPaged()
+    } else {
+      await fetchPaged()
+    }
   } catch (e) {
     ElMessage.error(e.message || '保存失败')
   } finally {
@@ -128,7 +169,8 @@ async function handleDelete(row) {
   try {
     await siteApi.remove(row.id)
     ElMessage.success('已删除')
-    await loadData()
+    await fetchPaged()
+    if (!sites.value.length && page.value > 1) page.value--
   } catch (e) {
     ElMessage.error(e.message || '删除失败')
   }
@@ -142,7 +184,9 @@ async function handleBatchDelete() {
   try {
     await siteApi.batchRemove(selected.value.map(r => r.id))
     ElMessage.success('已批量删除')
-    await loadData()
+    selected.value = []
+    await fetchPaged()
+    if (!sites.value.length && page.value > 1) page.value--
   } catch (e) {
     ElMessage.error(e.message || '删除失败')
   }
@@ -171,13 +215,14 @@ onMounted(loadData)
       </div>
     </div>
     <div class="table-card">
-      <el-table v-loading="loading" :data="paged" stripe @selection-change="onSelectionChange">
+      <el-table v-loading="loading" :data="sites" stripe @selection-change="onSelectionChange">
         <el-table-column type="selection" width="48" />
         <el-table-column label="图标" width="70">
           <template #default="{ row }">
             <img v-if="row.image_url" :src="row.image_url" class="table-img">
-            <img v-else-if="row.favicon_url || row.url" :src="faviconOf(row)" class="table-ico">
-            <span v-else class="table-letter">{{ row.name[0] }}</span>
+            <FaviconImg v-else :candidates="faviconCandidates(row)" :alt="row.name" :size="26" img-class="table-ico">
+              <span class="table-letter">{{ row.name[0] }}</span>
+            </FaviconImg>
           </template>
         </el-table-column>
         <el-table-column prop="name" label="名称" width="180" />
@@ -224,8 +269,8 @@ onMounted(loadData)
       <el-pagination
         v-model:current-page="page"
         v-model:page-size="pageSize"
-        :total="filteredSites.length"
-        :page-sizes="[20, 50, 100]"
+        :total="total"
+        :page-sizes="[10, 20, 50]"
         layout="total, sizes, prev, pager, next, jumper"
         background
         class="tb-pagination"
@@ -254,10 +299,46 @@ onMounted(loadData)
           <el-input v-model="form.description" type="textarea" :rows="2" placeholder="一句话介绍该网站" />
         </el-form-item>
         <el-form-item label="图标地址">
-          <el-input v-model="form.favicon_url" placeholder="favicon URL（可选，留空自动获取）" />
+          <el-select
+            v-model="form.favicon_url"
+            filterable
+            allow-create
+            default-first-option
+            clearable
+            placeholder="选择或手动输入图标地址，留空自动按多源解析"
+            style="width: 100%"
+          >
+            <el-option label="自动（按顺序容灾）" value="" />
+            <el-option v-for="u in hostCandidates" :key="u" :label="u" :value="u" />
+          </el-select>
+          <div class="favicon-preview">
+            <div class="favicon-preview__head">候选预览 — 点击选用，悬停查看来源</div>
+            <div v-if="hostCandidates.length" class="candidate-grid">
+              <button
+                v-for="u in hostCandidates"
+                :key="u"
+                type="button"
+                class="candidate"
+                :class="{ 'is-selected': form.favicon_url === u }"
+                :title="`${getFaviconSource(u)} — ${u}`"
+                @click="form.favicon_url = u"
+              >
+                <img :src="u" class="candidate__img" loading="lazy" @error="e => e.target.classList.add('is-broken')">
+                <span class="candidate__src">{{ getFaviconSource(u) }}</span>
+                <span class="candidate__url" :title="u">{{ u }}</span>
+              </button>
+            </div>
+            <span v-else class="favicon-empty">请输入网址以生成候选</span>
+            <div v-if="form.favicon_url && !hostCandidates.includes(form.favicon_url)" class="candidate-note">
+              当前手动：{{ form.favicon_url }}
+            </div>
+          </div>
         </el-form-item>
         <el-form-item label="展示大图">
-          <el-input v-model="form.image_url" placeholder="卡片大图 URL（可选）" />
+          <el-input v-model="form.image_url" placeholder="卡片大图 URL（可选）" clearable />
+          <div v-if="form.image_url" class="favicon-preview__body" style="margin-top: 8px">
+            <img :src="form.image_url" alt="大图预览" class="table-img" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; border: 1px solid var(--el-border-color-lighter)" @error="e => e.target.style.display='none'">
+          </div>
         </el-form-item>
         <el-form-item label="标记">
           <el-checkbox v-model="form.is_featured">
@@ -320,5 +401,81 @@ onMounted(loadData)
 }
 .tag-gap {
   margin-right: var(--space-1);
+}
+.favicon-preview {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-light);
+}
+.favicon-preview__head {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+.candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+.candidate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+  transition: border-color 0.2s, background 0.2s;
+  &:hover {
+    border-color: var(--el-color-primary-light-5);
+    background: var(--el-color-primary-light-9);
+  }
+  &.is-selected {
+    border-color: var(--el-color-primary);
+    background: var(--el-color-primary-light-9);
+  }
+}
+.candidate__img {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid var(--el-border-color-lighter);
+  object-fit: contain;
+  flex-shrink: 0;
+  &.is-broken {
+    opacity: 0.25;
+  }
+}
+.candidate__src {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--el-color-primary);
+  white-space: nowrap;
+}
+.candidate__url {
+  font-size: 10px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+.candidate-note {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  word-break: break-all;
+}
+.favicon-empty {
+  font-size: 12px;
+  color: var(--el-text-color-placeholder);
 }
 </style>

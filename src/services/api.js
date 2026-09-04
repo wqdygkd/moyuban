@@ -42,6 +42,20 @@ export const subcategoryApi = {
 
 export const siteApi = {
   ...makeCrud('sites'),
+  async listPaged({ page = 1, pageSize = 10, keyword = '', subcategoryIds = null } = {}) {
+    if (subcategoryIds && subcategoryIds.length === 0) return { data: [], total: 0 }
+    let query = database.from('sites').select('*', { count: 'exact' }).order('sort_order', { ascending: true })
+    if (keyword) {
+      const k = `%${keyword.replace(/[%\\]/g, '').trim()}%`
+      query = query.or(`name.ilike.${k},description.ilike.${k}`)
+    }
+    if (subcategoryIds && subcategoryIds.length) query = query.in('subcategory_id', subcategoryIds)
+    const from = (page - 1) * pageSize
+    query = query.range(from, from + pageSize - 1)
+    const { data, error, count } = await query
+    if (error) throw error
+    return { data, total: count ?? 0 }
+  },
   async listFeatured() {
     const { data, error } = await database.from('sites').select('*').eq('is_featured', true).order('sort_order', { ascending: true })
     if (error) throw error

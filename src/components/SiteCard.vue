@@ -1,19 +1,13 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
+import FaviconImg from '@/components/FaviconImg.vue'
 import { siteApi } from '@/services/api'
+import { getFaviconCandidates } from '@/utils/favicon'
 
 const props = defineProps({ site: { type: Object, required: true } })
-const hideIcon = ref(false)
-const iconSrc = computed(() => {
-  if (hideIcon.value) return ''
-  if (props.site.image_url) return props.site.image_url
-  const raw = props.site.favicon_url || props.site.url
-  if (!raw) return ''
-  try {
-    return `https://www.google.com/s2/favicons?domain=${new URL(raw).hostname}&sz=64`
-  } catch {
-    return ''
-  }
+const faviconCandidates = computed(() => {
+  if (props.site.image_url) return []
+  return getFaviconCandidates({ url: props.site.url, favicon_url: props.site.favicon_url })
 })
 function handleClick() {
   if (navigator.onLine && props.site.id) siteApi.incrementClick(props.site.id).catch(() => {})
@@ -24,7 +18,10 @@ function handleClick() {
   <a class="site-card" :href="site.url" target="_blank" rel="noopener" @click="handleClick">
     <div class="card-main">
       <span class="card-icon">
-        <img v-if="iconSrc" :src="iconSrc" :alt="site.name" width="36" height="36" loading="lazy" @error="hideIcon = true">
+        <img v-if="site.image_url" :src="site.image_url" :alt="site.name" width="36" height="36" loading="lazy">
+        <FaviconImg v-else-if="faviconCandidates.length" :candidates="faviconCandidates" :alt="site.name" :size="32" img-class="card-favicon">
+          <span class="card-letter">{{ site.name[0] }}</span>
+        </FaviconImg>
         <span v-else class="card-letter">{{ site.name[0] }}</span>
       </span>
       <div class="card-body">
@@ -104,7 +101,8 @@ function handleClick() {
   justify-content: center;
   overflow: hidden;
   transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-  img {
+  img,
+  .card-favicon {
     width: 100%;
     height: 100%;
     object-fit: contain;

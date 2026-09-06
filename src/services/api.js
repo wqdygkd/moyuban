@@ -1,55 +1,94 @@
-import { database } from '@/lib/supabase'
+import { BASE_62_DIGITS, generateKeyBetween } from 'fractional-indexing'
+import { assertSupabase, supabase } from '@/lib/supabase'
 
-function makeCrud(table) {
+// 写操作前确认本地仍有 session，避免以游客(anon)身份发请求
+// （此时 PostgREST 会报极具误导性的 "GRANT ... TO anon"，切勿照做给 anon 开写权限）。
+async function requireSession(action = '保存') {
+  assertSupabase()
+  const { data } = await supabase.auth.getSession()
+  if (!data.session)
+    throw new Error(`${action}失败：登录已过期或未登录，请重新登录后再试。`)
+}
+
+// 有 session 仍 42501，说明线上库表级权限/策略缺失，修库而不是给 anon 放权。
+function friendlyWriteError(originalError, action = '保存') {
+  const message = originalError?.message || ''
+  if (originalError?.code === 'PGRST301' || /jwt expired|invalid jwt/i.test(message))
+    return new Error(`${action}失败：登录已过期，请重新登录后再试。`)
+  if (originalError?.code === '42501' || /permission denied/i.test(message))
+    return new Error(`${action}失败：数据库拒绝写入（表权限缺失）。请在 Supabase SQL Editor 重新执行 supabase/schema.sql 后重试。`)
+  return originalError
+}
+
+async function withSession(action, fn) {
+  await requireSession(action)
+  try {
+    return await fn()
+  } catch (error) {
+    throw friendlyWriteError(error, action)
+  }
+}
+
+function createCrudApi(table, { orderBy = 'sort_order' } = {}) {
   return {
     async list(select = '*') {
-      const { data, error } = await database.from(table).select(select).order('sort_order', { ascending: true })
+      assertSupabase()
+      const { data, error } = await supabase.from(table).select(select).order(orderBy, { ascending: true })
       if (error) throw error
       return data
     },
     async create(payload) {
-      const { data, error } = await database.from(table).insert(payload).select().single()
-      if (error) throw error
-      return data
+      return withSession('新增', async () => {
+        const { data, error } = await supabase.from(table).insert(payload).select().single()
+        if (error) throw error
+        return data
+      })
     },
     async update(id, payload) {
-      const { data, error } = await database.from(table).update(payload).eq('id', id).select().single()
-      if (error) throw error
-      return data
+      return withSession('保存', async () => {
+        const { data, error } = await supabase.from(table).update(payload).eq('id', id).select().single()
+        if (error) throw error
+        return data
+      })
     },
     async remove(id) {
-      const { error } = await database.from(table).delete().eq('id', id)
-      if (error) throw error
+      return withSession('删除', async () => {
+        const { error } = await supabase.from(table).delete().eq('id', id)
+        if (error) throw error
+      })
     },
     async batchRemove(ids) {
-      const { error } = await database.from(table).delete().in('id', ids)
-      if (error) throw error
+      return withSession('删除', async () => {
+        const { error } = await supabase.from(table).delete().in('id', ids)
+        if (error) throw error
+      })
     },
   }
 }
 
-export const categoryApi = makeCrud('categories')
+export const categoryApi = createCrudApi('categories')
 
 export const subcategoryApi = {
-  ...makeCrud('subcategories'),
-  // 覆盖 list 以带上所属分类信息
+  ...createCrudApi('subcategories'),
   async list() {
-    const { data, error } = await database.from('subcategories').select('*, category:categories(name, slug)').order('sort_order', { ascending: true })
+    assertSupabase()
+    const { data, error } = await supabase.from('subcategories').select('*, category:categories(name, slug)').order('sort_order', { ascending: true })
     if (error) throw error
     return data
   },
 }
 
 export const siteApi = {
-  ...makeCrud('sites'),
-  async listPaged({ page = 1, pageSize = 10, keyword = '', subcategoryIds = null } = {}) {
-    if (subcategoryIds && subcategoryIds.length === 0) return { data: [], total: 0 }
-    let query = database.from('sites').select('*', { count: 'exact' }).order('sort_order', { ascending: true })
+  ...createCrudApi('sites'),
+  async listPaged({ page = 1, pageSize = 10, keyword = '', subcategoryIds } = {}) {
+    assertSupabase()
+    if (subcategoryIds?.length === 0) return { data: [], total: 0 }
+    let query = supabase.from('sites').select('*', { count: 'exact' }).order('sort_order', { ascending: true })
     if (keyword) {
-      const k = `%${keyword.replace(/[%\\]/g, '').trim()}%`
-      query = query.or(`name.ilike.${k},description.ilike.${k}`)
+      const k = `%${keyword.replaceAll(/[%\\]/g, '').trim()}%`
+      query = query.or(`name.ilike.${k},url.ilike.${k},description.ilike.${k}`)
     }
-    if (subcategoryIds && subcategoryIds.length) query = query.in('subcategory_id', subcategoryIds)
+    if (subcategoryIds?.length) query = query.in('subcategory_id', subcategoryIds)
     const from = (page - 1) * pageSize
     query = query.range(from, from + pageSize - 1)
     const { data, error, count } = await query
@@ -57,19 +96,34 @@ export const siteApi = {
     return { data, total: count ?? 0 }
   },
   async listFeatured() {
-    const { data, error } = await database.from('sites').select('*').eq('is_featured', true).order('sort_order', { ascending: true })
+    assertSupabase()
+    const { data, error } = await supabase.from('sites').select('*').eq('is_featured', true).order('sort_order', { ascending: true })
     if (error) throw error
     return data
   },
+  // 同子分类下末尾的新 fractional 键（新增网址留空排序时调用，仅读同组键）
+  async endKeyForSub(subcategoryId) {
+    assertSupabase()
+    const { data, error } = await supabase.from('sites').select('sort_order').eq('subcategory_id', subcategoryId)
+    if (error) throw error
+    const keys = (data || []).map(r => r.sort_order).filter(Boolean).map(String)
+    let last
+    for (const key of keys) {
+      if (last === undefined || last < key) last = key
+    }
+    return generateKeyBetween(last, undefined, BASE_62_DIGITS)
+  },
   async incrementClick(id) {
-    await database.rpc('increment_click', { row_id: id })
+    assertSupabase()
+    await supabase.rpc('increment_click', { row_id: id })
   },
 }
 
-// 单行三版本探测（短列名 cat/sub/site，~30B），按表按需拉取
+// 单次探测三版本（~30B），按表按需拉取
 export const metaApi = {
-  async getVersions() {
-    const { data, error } = await database.from('app_meta').select('cat, sub, site').eq('id', 1).single()
+  async getVersion() {
+    assertSupabase()
+    const { data, error } = await supabase.from('app_meta').select('cat, sub, site').eq('id', 1).single()
     if (error) throw error
     return data
   },
@@ -81,30 +135,25 @@ const CAT_HOME_FIELDS = 'id,name,slug,icon,sort_order'
 const SUB_HOME_FIELDS = 'id,category_id,name,slug,sort_order'
 
 export async function fetchCategories() {
-  const { data, error } = await database.from('categories').select(CAT_HOME_FIELDS).order('sort_order', { ascending: true })
+  assertSupabase()
+  const { data, error } = await supabase.from('categories').select(CAT_HOME_FIELDS).order('sort_order', { ascending: true })
   if (error) throw error
   return data
 }
 export async function fetchSubcategories() {
-  const { data, error } = await database.from('subcategories').select(SUB_HOME_FIELDS).order('sort_order', { ascending: true })
+  assertSupabase()
+  const { data, error } = await supabase.from('subcategories').select(SUB_HOME_FIELDS).order('sort_order', { ascending: true })
   if (error) throw error
   return data
 }
 export async function fetchSites() {
-  const { data, error } = await database.from('sites').select(SITE_HOME_FIELDS).eq('is_active', true).order('sort_order', { ascending: true })
+  assertSupabase()
+  const { data, error } = await supabase.from('sites').select(SITE_HOME_FIELDS).eq('is_active', true).order('sort_order', { ascending: true })
   if (error) throw error
   return data
 }
 
 export async function fetchHomeData() {
-  const [catsRes, subsRes, sitesRes] = await Promise.all([
-    database.from('categories').select(CAT_HOME_FIELDS).order('sort_order', { ascending: true }),
-    database.from('subcategories').select(SUB_HOME_FIELDS).order('sort_order', { ascending: true }),
-    database.from('sites').select(SITE_HOME_FIELDS).eq('is_active', true).order('sort_order', { ascending: true }),
-  ])
-  if (catsRes.error) throw catsRes.error
-  if (subsRes.error) throw subsRes.error
-  if (sitesRes.error) throw sitesRes.error
-  const featured = sitesRes.data.filter(s => s.is_featured)
-  return { categories: catsRes.data, subcategories: subsRes.data, sites: sitesRes.data, featured }
+  const [categories, subcategories, sites] = await Promise.all([fetchCategories(), fetchSubcategories(), fetchSites()])
+  return { categories, subcategories, sites, featured: sites.filter(s => s.is_featured) }
 }

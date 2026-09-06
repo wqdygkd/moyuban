@@ -152,8 +152,8 @@ vercel --prod   # 再次部署使变量生效
 
 1. 登录 [app.netlify.com](https://app.netlify.com) → `Add new site` → `Import an existing project` → 选择 `GitHub` 并授权 → 选中 `moyuban`。
 2. 构建配置保持默认（`netlify.toml` 已预设）：
-    - Build command: `pnpm build`
-    - Publish directory: `dist`
+   - Build command: `pnpm build`
+   - Publish directory: `dist`
 3. 点击 `Show advanced` → `Add environment variables`，添加：
 
    ```txt
@@ -215,7 +215,7 @@ netlify deploy --prod
 | `permission denied for table sites`            | `schema.sql` 未完整执行或 RLS/GRANT 缺失；重新执行 `schema.sql`                                                                                                  |
 | 登录提示 `Invalid login credentials`           | 账号未创建或未勾选 `Auto Confirm`；前往 `Authentication → Users` 重建并确认邮箱已验证                                                                            |
 | 刷新 `/admin` 404                              | 检查项目根目录是否包含 `vercel.json` / `netlify.toml` 且已推送                                                                                                   |
-| Windows `supabase` 命令报 `No matching binary` | PATH 被 pnpm 全局的旧 CLI 占用：执行 `pnpm remove -g supabase` 后使用 scoop/brew 安装的版本，`supabase --version` 验证                                          |
+| Windows `supabase` 命令报 `No matching binary` | PATH 被 pnpm 全局的旧 CLI 占用：执行 `pnpm remove -g supabase` 后使用 scoop/brew 安装的版本，`supabase --version` 验证                                           |
 
 ---
 

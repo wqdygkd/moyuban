@@ -48,7 +48,7 @@ async function submit() {
   try {
     await auth.loginWithPassword(form.email, form.password)
     ElMessage.success('登录成功')
-    const redirect = route.query.redirect || '/admin'
+    const redirect = route.query.redirect || '/'
     router.push(String(redirect))
   } catch (e) {
     message.value = e.message || '登录失败'

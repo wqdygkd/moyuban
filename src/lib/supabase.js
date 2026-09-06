@@ -8,20 +8,18 @@ if (!supabaseUrl || !supabasePublishableKey) {
 }
 
 export const supabase
-  = supabaseUrl && supabasePublishableKey ? createClient(supabaseUrl, supabasePublishableKey) : undefined
+  = supabaseUrl && supabasePublishableKey
+    ? createClient(supabaseUrl, supabasePublishableKey, { auth: { persistSession: true, autoRefreshToken: true } })
+    : undefined
 
 export function assertSupabase() {
   if (!supabase) throw new Error('Supabase 未配置')
 }
 
-// 单点断言的 from/rpc 封装，消除各 api 重复的 assertSupabase()
-export const database = {
-  from(table) {
-    assertSupabase()
-    return supabase.from(table)
-  },
-  rpc(name, arguments_) {
-    assertSupabase()
-    return supabase.rpc(name, arguments_)
-  },
+// 表级清空复用（import / 清理共用）
+export async function clearTables(tables) {
+  for (const table of tables) {
+    const { error } = await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    if (error) throw new Error(`清空 ${table} 失败: ${error.message}`)
+  }
 }

@@ -11,7 +11,7 @@ export default antfu(
   {
     rules: {
       'antfu/if-newline': 'off',
-      'style/brace-style': 'off',
+      'style/brace-style': ['error', '1tbs', { allowSingleLine: false }],
     },
   },
 )

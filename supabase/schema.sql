@@ -18,7 +18,7 @@ create table if not exists public.categories (
   slug        text not null unique,         -- 英文标识，用于路由/查询
   icon        text,                         -- 分类图标(可空)
   description text,
-  sort_order  int not null default 0,       -- 排序
+  sort_order  text,                   -- fractional 索引键(fractional-indexing 包，BASE_62)，字典序即展示序；拖拽只写被移动的一条
   created_at  timestamptz not null default now()
 );
 
@@ -31,7 +31,7 @@ create table if not exists public.subcategories (
   category_id  uuid not null references public.categories(id) on delete cascade,
   name         text not null,               -- 子分类名称
   slug         text,
-  sort_order   int not null default 0,
+  sort_order   text, -- fractional 索引键，字典序即展示序
   created_at   timestamptz not null default now()
 );
 
@@ -45,13 +45,14 @@ create table if not exists public.sites (
   name           text not null,             -- 站点名称
   url            text not null,             -- 站点链接
   description    text,                      -- 一句话简介
+  keywords       text,                      -- 搜索关键词(逗号分隔，可空)
   favicon_url    text,                      -- 站点 favicon URL
   image_url      text,                      -- 卡片展示大图(可空)
   is_hot         boolean not null default false, -- 智能推荐-热门
   is_new         boolean not null default false, -- 智能推荐-最新
   is_featured    boolean not null default false, -- 首页置顶推荐(智能推荐区)
   click_count    bigint not null default 0, -- 点击次数
-  sort_order     int not null default 0,    -- 组内排序
+  sort_order     text, -- 组内 fractional 索引键，字典序即展示序
   is_active      boolean not null default true,
   created_at     timestamptz not null default now(),
   updated_at     timestamptz not null default now()
@@ -59,6 +60,38 @@ create table if not exists public.sites (
 
 create index if not exists idx_sites_subcategory on public.sites(subcategory_id);
 create index if not exists idx_subcategories_category on public.subcategories(category_id);
+
+-- 兼容老库：sites 新增 keywords 列（新库建表已含，以下是无操作）
+alter table public.sites add column if not exists keywords text;
+
+-- ------------------------------------------------------------
+-- 兼容老库：sort_order int → text（fractional 索引键）。
+-- 新库建表已是 text，以下均为无操作；老库执行时完成类型转换。
+-- trg_bump_on_sites_upd 按列定义，先删后建（后文重建）。
+-- ------------------------------------------------------------
+drop trigger if exists trg_bump_on_sites_upd on public.sites;
+
+DO $$ BEGIN
+  IF (SELECT data_type FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'categories' AND column_name = 'sort_order') <> 'text' THEN
+    ALTER TABLE public.categories ALTER COLUMN sort_order TYPE text USING sort_order::text;
+  END IF;
+  IF (SELECT data_type FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'subcategories' AND column_name = 'sort_order') <> 'text' THEN
+    ALTER TABLE public.subcategories ALTER COLUMN sort_order TYPE text USING sort_order::text;
+  END IF;
+  IF (SELECT data_type FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'sites' AND column_name = 'sort_order') <> 'text' THEN
+    ALTER TABLE public.sites ALTER COLUMN sort_order TYPE text USING sort_order::text;
+  END IF;
+END $$;
+
+ALTER TABLE public.categories ALTER COLUMN sort_order DROP NOT NULL;
+ALTER TABLE public.categories ALTER COLUMN sort_order DROP DEFAULT;
+ALTER TABLE public.subcategories ALTER COLUMN sort_order DROP NOT NULL;
+ALTER TABLE public.subcategories ALTER COLUMN sort_order DROP DEFAULT;
+ALTER TABLE public.sites ALTER COLUMN sort_order DROP NOT NULL;
+ALTER TABLE public.sites ALTER COLUMN sort_order DROP DEFAULT;
 
 -- ------------------------------------------------------------
 -- 行级安全性 (RLS)
@@ -139,20 +172,22 @@ drop policy if exists "public read app_meta" on public.app_meta;
 create policy "public read app_meta" on public.app_meta for select using (true);
 grant select on public.app_meta to anon, authenticated;
 
+-- 版本触发器函数以 owner 身份执行（SECURITY DEFINER）：登录用户写三表时触发的
+-- app_meta 更新，否则会被 app_meta 的表权限/RLS 挡住导致写入失败。
 create or replace function public.bump_categories_version()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql security definer set search_path = public as $$
 begin
   update public.app_meta set cat = cat + 1, updated_at = now() where id = 1;
   return null;
 end $$;
 create or replace function public.bump_subcategories_version()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql security definer set search_path = public as $$
 begin
   update public.app_meta set sub = sub + 1, updated_at = now() where id = 1;
   return null;
 end $$;
 create or replace function public.bump_sites_version()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql security definer set search_path = public as $$
 begin
   update public.app_meta set site = site + 1, updated_at = now() where id = 1;
   return null;
@@ -169,7 +204,7 @@ drop trigger if exists trg_bump_on_sites on public.sites;
 create trigger trg_bump_on_sites after insert or delete on public.sites
   for each statement execute function public.bump_sites_version();
 drop trigger if exists trg_bump_on_sites_upd on public.sites;
-create trigger trg_bump_on_sites_upd after update of subcategory_id, name, url, description, favicon_url, image_url, is_hot, is_new, is_featured, sort_order, is_active on public.sites
+create trigger trg_bump_on_sites_upd after update of subcategory_id, name, url, description, keywords, favicon_url, image_url, is_hot, is_new, is_featured, sort_order, is_active on public.sites
   for each statement execute function public.bump_sites_version();
 
 -- ------------------------------------------------------------

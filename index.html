@@ -10,22 +10,27 @@
       content="摸鱼办，上班摸鱼第一入口，集生活服务、实用工具、资源发现、AI领域、影音娱乐、设计灵感、站长工具、开发资源、探索发现于一体的高效摸鱼集合地。"
     />
     <meta name="theme-color" content="#0b0f16" />
+    <link rel="apple-touch-icon" href="/favicon-128x128.png" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="摸鱼办 - 上班摸鱼第一入口的网址导航" />
     <meta
       property="og:description"
       content="摸鱼不犯法，快乐每一天。生活服务、实用工具、AI领域、影音娱乐……高效摸鱼集合地。"
     />
+    <link rel="dns-prefetch" href="https://faviconsnap.com" />
+    <link rel="dns-prefetch" href="https://icon.horse" />
+    <link rel="dns-prefetch" href="https://www.google.com" />
+    <link rel="preconnect" href="https://faviconsnap.com" crossorigin />
+    <link rel="preconnect" href="https://icon.horse" crossorigin />
   </head>
   <body>
     <script>
       ;(function () {
-        var t = null
         try {
-          t = localStorage.getItem('plnav-theme')
+          var t = localStorage.getItem('theme')
+          var v = ['douyin', 'xhs', 'kuaishou', 'shipinhao'].indexOf(t) !== -1 ? t : 'douyin'
+          document.body.classList.add('theme-' + v)
         } catch (e) {}
-        var dark = t === 'dark' || (t !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches)
-        if (dark) document.documentElement.classList.add('dark')
       })()
     </script>
     <div id="app"></div>

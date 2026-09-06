@@ -1,12 +1,9 @@
 export function getHost(raw) {
   if (!raw) return ''
   try {
-    const u = new URL(raw.trim())
-    return u.hostname
+    return new URL(raw.trim()).hostname
   } catch {
-    // 裸 host 如 example.com
-    const h = raw.trim().split('/')[0].split('?')[0]
-    return h.includes('.') ? h : ''
+    return ''
   }
 }
 
@@ -19,14 +16,16 @@ export function getFaviconSource(url = '') {
   return '手动'
 }
 
+const faviconCache = new Map()
 export function getFaviconCandidates({ url, favicon_url } = {}) {
+  const key = `${url}::${favicon_url}`
+  if (faviconCache.has(key)) return faviconCache.get(key)
   const list = []
   const seen = new Set()
-  const push = u => {
-    if (u && !seen.has(u)) {
-      seen.add(u)
-      list.push(u)
-    }
+  const push = (u) => {
+    if (!u || seen.has(u)) return
+    seen.add(u)
+    list.push(u)
   }
   const manual = favicon_url?.trim()
   if (manual) push(manual)
@@ -34,9 +33,10 @@ export function getFaviconCandidates({ url, favicon_url } = {}) {
   if (host) {
     push(`https://${host}/favicon.svg`)
     push(`https://${host}/favicon.png`)
-    push(`https://faviconsnap.com/api/favicon?url=${host}`)
+    push(`https://faviconsnap.com/api/favicon?url=${host}&size=128`)
     push(`https://icon.horse/icon/${host}?size=128`)
     push(`https://www.google.com/s2/favicons?domain=${host}&sz=128`)
   }
+  faviconCache.set(key, list)
   return list
 }

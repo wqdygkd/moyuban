@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 
+defineOptions({ name: 'FaviconImg' })
 const props = defineProps({
   candidates: { type: Array, default: () => [] },
   alt: { type: String, default: '' },
@@ -17,7 +18,7 @@ watch(() => props.candidates, () => {
 
 function onError() {
   if (idx.value < props.candidates.length - 1) idx.value += 1
-  else idx.value = props.candidates.length // 耗尽
+  else idx.value = props.candidates.length
 }
 </script>
 
@@ -30,6 +31,8 @@ function onError() {
     :width="size"
     :height="size"
     loading="lazy"
+    decoding="async"
+    fetchpriority="low"
     @error="onError"
   >
   <slot v-else />

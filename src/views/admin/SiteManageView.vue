@@ -1,7 +1,7 @@
 <script setup>
 import { Plus, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import FaviconImg from '@/components/FaviconImg.vue'
 import { categoryApi, siteApi, subcategoryApi } from '@/services/api'
 import { getFaviconCandidates, getFaviconSource } from '@/utils/favicon'
@@ -20,9 +20,7 @@ const selected = ref([])
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 const dialogVisible = ref(false)
 const formRef = ref()
-function onSelectionChange(rows) {
-  selected.value = rows
-}
+const onSelectionChange = rows => (selected.value = rows)
 function defaultForm() {
   return {
     id: null,
@@ -31,13 +29,14 @@ function defaultForm() {
     name: '',
     url: '',
     description: '',
+    keywords: '',
     favicon_url: '',
     image_url: '',
     is_featured: false,
     is_hot: false,
     is_new: false,
     is_active: true,
-    sort_order: 0,
+    sort_order: '',
   }
 }
 const form = reactive(defaultForm())
@@ -72,8 +71,13 @@ function faviconCandidates(row) {
   if (row.image_url) return []
   return getFaviconCandidates({ url: row.url, favicon_url: row.favicon_url })
 }
+function onImgError(e) {
+  e.target.classList.add('is-broken')
+}
+function onPreviewError(e) {
+  e.target.style.display = 'none'
+}
 const hostCandidates = computed(() => getFaviconCandidates({ url: form.url }))
-const previewCandidates = computed(() => getFaviconCandidates({ url: form.url, favicon_url: form.favicon_url }))
 
 async function loadMeta() {
   const [cats, subs] = await Promise.all([categoryApi.list(), subcategoryApi.list()])
@@ -84,7 +88,7 @@ async function loadMeta() {
 async function fetchPaged() {
   loading.value = true
   try {
-    let subcategoryIds = null
+    let subcategoryIds
     if (filterCategory.value) {
       subcategoryIds = subcategories.value.filter(s => s.category_id === filterCategory.value).map(s => s.id)
       if (!subcategoryIds.length) {
@@ -132,6 +136,7 @@ watch(pageSize, () => {
   else page.value = 1
 })
 watch(page, fetchPaged)
+onBeforeUnmount(() => clearTimeout(searchTimer))
 function openDialog(row) {
   Object.assign(form, defaultForm())
   if (row) Object.assign(form, { ...row, category_id: subMap.value.get(row.subcategory_id)?.category_id || '' })
@@ -148,6 +153,8 @@ async function save() {
     const { id, ...payload } = form
     const isCreate = !id
     delete payload.category_id
+    if (isCreate && !payload.sort_order) payload.sort_order = await siteApi.endKeyForSub(payload.subcategory_id)
+    else if (!payload.sort_order) delete payload.sort_order
     if (id) await siteApi.update(id, payload)
     else await siteApi.create(payload)
     ElMessage.success(id ? '更新成功' : '新增成功')
@@ -197,7 +204,7 @@ onMounted(loadData)
 <template>
   <div class="site-manage ui-page ui-page--wide">
     <div class="tb-toolbar">
-      <el-input v-model="keyword" placeholder="搜索网站名称/描述" clearable class="tb-search" :prefix-icon="Search" />
+      <el-input v-model="keyword" placeholder="搜索网站名称/网址/描述" clearable class="tb-search" :prefix-icon="Search" />
       <el-select v-model="filterCategory" placeholder="按分类筛选" clearable class="tb-select">
         <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
       </el-select>
@@ -296,7 +303,10 @@ onMounted(loadData)
           <el-input v-model="form.url" placeholder="https://..." />
         </el-form-item>
         <el-form-item label="简介">
-          <el-input v-model="form.description" type="textarea" :rows="2" placeholder="一句话介绍该网站" />
+          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="一句话介绍该网站" />
+        </el-form-item>
+        <el-form-item label="关键词">
+          <el-input v-model="form.keywords" type="textarea" :rows="3" placeholder="多个关键词用逗号分隔" />
         </el-form-item>
         <el-form-item label="图标地址">
           <el-select
@@ -312,21 +322,40 @@ onMounted(loadData)
             <el-option v-for="u in hostCandidates" :key="u" :label="u" :value="u" />
           </el-select>
           <div class="favicon-preview">
-            <div class="favicon-preview__head">候选预览 — 点击选用，悬停查看来源</div>
+            <div class="favicon-preview__head">
+              候选预览 — 点击选用，悬停查看来源
+            </div>
             <div v-if="hostCandidates.length" class="candidate-grid">
-              <button
+              <el-tooltip
                 v-for="u in hostCandidates"
                 :key="u"
-                type="button"
-                class="candidate"
-                :class="{ 'is-selected': form.favicon_url === u }"
-                :title="`${getFaviconSource(u)} — ${u}`"
-                @click="form.favicon_url = u"
+                placement="top"
+                effect="light"
+                :show-after="180"
+                :hide-after="0"
+                popper-class="favicon-hover-popper"
               >
-                <img :src="u" class="candidate__img" loading="lazy" @error="e => e.target.classList.add('is-broken')">
-                <span class="candidate__src">{{ getFaviconSource(u) }}</span>
-                <span class="candidate__url" :title="u">{{ u }}</span>
-              </button>
+                <template #content>
+                  <div class="favicon-hover-content">
+                    <img :src="u" alt="原图预览" class="favicon-hover-img" loading="lazy" @error="onImgError">
+                    <div class="favicon-hover-meta">
+                      <span class="favicon-hover-src">{{ getFaviconSource(u) }}</span>
+                      <span class="favicon-hover-url">{{ u }}</span>
+                    </div>
+                  </div>
+                </template>
+                <button
+                  type="button"
+                  class="candidate"
+                  :class="{ 'is-selected': form.favicon_url === u }"
+                  :title="`${getFaviconSource(u)} — ${u}`"
+                  @click="form.favicon_url = u"
+                >
+                  <img :src="u" class="candidate__img" loading="lazy" @error="onImgError">
+                  <span class="candidate__src">{{ getFaviconSource(u) }}</span>
+                  <span class="candidate__url" :title="u">{{ u }}</span>
+                </button>
+              </el-tooltip>
             </div>
             <span v-else class="favicon-empty">请输入网址以生成候选</span>
             <div v-if="form.favicon_url && !hostCandidates.includes(form.favicon_url)" class="candidate-note">
@@ -337,7 +366,12 @@ onMounted(loadData)
         <el-form-item label="展示大图">
           <el-input v-model="form.image_url" placeholder="卡片大图 URL（可选）" clearable />
           <div v-if="form.image_url" class="favicon-preview__body" style="margin-top: 8px">
-            <img :src="form.image_url" alt="大图预览" class="table-img" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; border: 1px solid var(--el-border-color-lighter)" @error="e => e.target.style.display='none'">
+            <el-tooltip placement="top" effect="light" :show-after="180" popper-class="favicon-hover-popper">
+              <template #content>
+                <img :src="form.image_url" alt="原图预览" style="width: 220px; height: 220px; object-fit: contain; display: block; border-radius: 8px; background: #fff" @error="onPreviewError">
+              </template>
+              <img :src="form.image_url" alt="大图预览" class="table-img table-img--hoverable" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; border: 1px solid var(--el-border-color-lighter); cursor: zoom-in" @error="onPreviewError">
+            </el-tooltip>
           </div>
         </el-form-item>
         <el-form-item label="标记">
@@ -354,8 +388,8 @@ onMounted(loadData)
             启用
           </el-checkbox>
         </el-form-item>
-        <el-form-item label="排序">
-          <el-input-number v-model="form.sort_order" :min="0" />
+        <el-form-item label="排序键">
+          <el-input v-model="form.sort_order" placeholder="留空自动排到同组末尾" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -431,7 +465,9 @@ onMounted(loadData)
   cursor: pointer;
   text-align: left;
   min-width: 0;
-  transition: border-color 0.2s, background 0.2s;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
   &:hover {
     border-color: var(--el-color-primary-light-5);
     background: var(--el-color-primary-light-9);
@@ -477,5 +513,49 @@ onMounted(loadData)
 .favicon-empty {
   font-size: 12px;
   color: var(--el-text-color-placeholder);
+}
+.table-img--hoverable {
+  transition: transform 0.15s;
+  &:hover {
+    transform: scale(1.03);
+  }
+}
+</style>
+
+<style lang="scss">
+.favicon-hover-popper {
+  max-width: 240px;
+}
+.favicon-hover-content {
+  text-align: center;
+}
+.favicon-hover-img {
+  max-width: 500px;
+  max-height: 500px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid var(--el-border-color-lighter);
+  &.is-broken {
+    opacity: 0.3;
+  }
+}
+.favicon-hover-meta {
+  margin-top: 8px;
+}
+.favicon-hover-src {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-color-primary);
+}
+.favicon-hover-url {
+  display: block;
+  font-size: 10px;
+  color: var(--el-text-color-secondary);
+  word-break: break-all;
+  margin-top: 2px;
 }
 </style>

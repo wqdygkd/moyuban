@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-const THEME_KEY = 'plnav-theme'
+const THEME_KEY = 'theme'
 const THEMES = ['douyin', 'xhs', 'kuaishou', 'shipinhao']
 const DEFAULT_THEME = 'douyin'
 
@@ -11,8 +11,6 @@ function apply(theme) {
   const body = document.body
   for (const t of THEMES) body.classList.remove(`theme-${t}`)
   body.classList.add(`theme-${theme}`)
-  // 暗色主题（除小红书外）复用 EP 官方 dark css-vars 处理组件其余配色
-  document.documentElement.classList.toggle('dark', theme !== 'xhs')
 }
 
 function init() {

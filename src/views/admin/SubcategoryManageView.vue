@@ -1,7 +1,8 @@
 <script setup>
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { BASE_62_DIGITS, generateKeyBetween } from 'fractional-indexing'
 import { computed, onMounted, reactive, ref } from 'vue'
-import { usePagination } from '@/composables/use-admin-table'
+import { usePagination, useSelection } from '@/composables/use-pagination'
 import { categoryApi, siteApi, subcategoryApi } from '@/services/api'
 
 const loading = ref(false)
@@ -9,10 +10,15 @@ const saving = ref(false)
 const categories = ref([])
 const subcategories = ref([])
 const sites = ref([])
-const { page, pageSize, paged, selected, onSelectionChange } = usePagination(subcategories)
+const { page, pageSize, paged } = usePagination(subcategories)
+const { selected, onSelectionChange } = useSelection()
 const dialogVisible = ref(false)
+const dragIndex = ref(-1)
+const dragId = ref(null)
+const overId = ref(null)
+const savingOrder = ref(false)
 const formRef = ref()
-const defaultForm = () => ({ id: null, category_id: '', name: '', slug: '', sort_order: 0 })
+const defaultForm = () => ({ id: null, category_id: '', name: '', slug: '', sort_order: '' })
 const form = reactive(defaultForm())
 const rules = {
   category_id: [{ required: true, message: '请选择所属分类', trigger: 'change' }],
@@ -39,6 +45,61 @@ async function loadData() {
     loading.value = false
   }
 }
+// fractional indexing：拖拽落定后只 update 被移动的一条（前后邻居键之间生成新键）
+function rowClassName({ row }) {
+  return row.id === overId.value ? 'drag-over' : ''
+}
+function onDragStart(row, i) {
+  dragIndex.value = i
+  dragId.value = row.id
+}
+function onDragEnter(row, i) {
+  overId.value = row.id
+  if (i === dragIndex.value || dragIndex.value < 0) return
+  const base = (page.value - 1) * pageSize.value
+  const from = base + dragIndex.value
+  const to = base + i
+  const list = subcategories.value
+  const [moved] = list.splice(from, 1)
+  list.splice(to, 0, moved)
+  dragIndex.value = i
+}
+async function persistOrder() {
+  overId.value = null
+  const id = dragId.value
+  dragIndex.value = -1
+  dragId.value = null
+  if (!id) return
+  const list = subcategories.value
+  const newIndex = list.findIndex(s => s.id === id)
+  if (newIndex < 0) return
+  const previous = newIndex > 0 ? list[newIndex - 1].sort_order || undefined : undefined
+  const next = newIndex < list.length - 1 ? list[newIndex + 1].sort_order || undefined : undefined
+  savingOrder.value = true
+  try {
+    let newKey
+    try {
+      newKey = generateKeyBetween(previous, next, BASE_62_DIGITS)
+    } catch {
+      // 邻居键非法：退化为追加到末尾
+      const keys = list.map(s => s.sort_order).filter(Boolean).map(String)
+      let last
+      for (const key of keys) {
+        if (last === undefined || last < key) last = key
+      }
+      newKey = generateKeyBetween(last, undefined, BASE_62_DIGITS)
+    }
+    if (list[newIndex].sort_order === newKey) return
+    await subcategoryApi.update(id, { sort_order: newKey })
+    list[newIndex].sort_order = newKey
+    ElMessage.success('排序已保存')
+  } catch (e) {
+    ElMessage.error(e.message || '排序保存失败')
+    await loadData()
+  } finally {
+    savingOrder.value = false
+  }
+}
 function openDialog(row) {
   Object.assign(form, defaultForm())
   if (row) Object.assign(form, row)
@@ -53,8 +114,20 @@ async function save() {
   saving.value = true
   try {
     const { id, ...payload } = form
-    if (id) await subcategoryApi.update(id, payload)
-    else await subcategoryApi.create(payload)
+    if (id) {
+      if (!payload.sort_order) delete payload.sort_order
+      await subcategoryApi.update(id, payload)
+    } else {
+      if (!payload.sort_order) {
+        const keys = subcategories.value.map(s => s.sort_order).filter(Boolean).map(String)
+        let last
+        for (const key of keys) {
+          if (last === undefined || last < key) last = key
+        }
+        payload.sort_order = generateKeyBetween(last, undefined, BASE_62_DIGITS)
+      }
+      await subcategoryApi.create(payload)
+    }
     ElMessage.success(id ? '更新成功' : '新增成功')
     dialogVisible.value = false
     await loadData()
@@ -114,8 +187,22 @@ onMounted(loadData)
       </div>
     </div>
     <div class="table-card">
-      <el-table v-loading="loading" :data="paged" stripe @selection-change="onSelectionChange">
+      <el-table v-loading="loading || savingOrder" :data="paged" stripe row-key="id" :row-class-name="rowClassName" @selection-change="onSelectionChange">
         <el-table-column type="selection" width="48" />
+        <el-table-column label="" width="44">
+          <template #default="{ row, $index }">
+            <span
+              class="drag-handle"
+              title="拖拽排序"
+              draggable="true"
+              @dragstart="onDragStart(row, $index)"
+              @dragenter="onDragEnter(row, $index)"
+              @dragover.prevent
+              @drop="persistOrder"
+              @dragend="persistOrder"
+            >⠿</span>
+          </template>
+        </el-table-column>
         <el-table-column label="所属分类" min-width="160">
           <template #default="{ row }">
             <el-tag type="info">
@@ -124,7 +211,7 @@ onMounted(loadData)
           </template>
         </el-table-column>
         <el-table-column prop="name" label="子分类名称" min-width="180" />
-        <el-table-column prop="sort_order" label="排序" width="90" />
+        <el-table-column prop="sort_order" label="排序键" width="110" />
         <el-table-column label="网址数" width="100">
           <template #default="{ row }">
             <el-tag size="small">
@@ -166,8 +253,8 @@ onMounted(loadData)
         <el-form-item label="标识 slug">
           <el-input v-model="form.slug" placeholder="例如：news" />
         </el-form-item>
-        <el-form-item label="排序">
-          <el-input-number v-model="form.sort_order" :min="0" />
+        <el-form-item label="排序键">
+          <el-input v-model="form.sort_order" placeholder="留空自动排到末尾" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -186,5 +273,18 @@ onMounted(loadData)
 .tb-pagination {
   margin-top: var(--space-4);
   justify-content: flex-end;
+}
+.drag-handle {
+  cursor: move;
+  color: var(--el-text-color-placeholder);
+  font-size: 16px;
+  user-select: none;
+  padding: 4px 8px;
+  &:hover {
+    color: var(--el-color-primary);
+  }
+}
+:deep(.drag-over td) {
+  border-top: 2px solid var(--el-color-primary);
 }
 </style>

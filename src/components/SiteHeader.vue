@@ -16,7 +16,9 @@ const THEME_LABEL = {
   shipinhao: '视频号',
 }
 
-const themeLabel = t => THEME_LABEL[t] || t
+function themeLabel(t) {
+  return THEME_LABEL[t] || t
+}
 
 function onThemeCommand(t) {
   theme.set(t)
@@ -28,16 +30,17 @@ const avatarText = computed(() => {
 })
 
 async function handleLogout() {
-  await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
-    confirmButtonText: '退出',
-    cancelButtonText: '取消',
-    type: 'warning',
-  })
+  try {
+    await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
+      confirmButtonText: '退出',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
+    return // 点取消：直接返回，避免 unhandled rejection 刷屏
+  }
   await auth.logout()
   ElMessage.success('已退出登录')
-  if (window.location.pathname.startsWith('/admin')) {
-    window.location.href = '/'
-  }
 }
 </script>
 

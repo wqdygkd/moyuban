@@ -1,53 +1,34 @@
-const KEY_DATA = 'nav_home_cache_v2'
-const KEY_VERS = 'nav_versions_v1'
+const KEY_DATA = 'nav_home_cache_v3'
+const TTL_MS = 1000 * 60 * 60 * 24 // 24h 过期，过期仍可用作兜底但后台必刷新
 
 function safeJsonParse(raw) {
-  try { return JSON.parse(raw) } catch { return null }
-}
-
-export function readVersions() {
   try {
-    const raw = localStorage.getItem(KEY_VERS)
-    if (raw) {
-      const v = safeJsonParse(raw)
-      if (v && typeof v.categories === 'number') return v
-    }
-  } catch {}
-  return null
-}
-
-export function writeVersions(v) {
-  try {
-    if (!v) localStorage.removeItem(KEY_VERS)
-    else localStorage.setItem(KEY_VERS, JSON.stringify(v))
+    return JSON.parse(raw)
   } catch {}
 }
 
 export function readHomeCache() {
   try {
     const raw = localStorage.getItem(KEY_DATA)
-    if (raw) {
-      const data = safeJsonParse(raw)
-      if (data && Array.isArray(data.categories)) return data
-    }
+    if (!raw) return
+    const data = safeJsonParse(raw)
+    if (!data || !Array.isArray(data.categories)) return
+    // 超期标记为过期（调用方可据此强制刷新），但仍返回数据以秒开
+    if (data._ts && Date.now() - data._ts > TTL_MS) data._expired = true
+    return data
   } catch {}
-  return undefined
 }
 
 export function writeHomeCache(payload) {
   try {
-    const versions = payload.versions ?? readVersions()
-    const toStore = { ...payload, versions, _ts: Date.now() }
-    localStorage.setItem(KEY_DATA, JSON.stringify(toStore))
-    if (versions) writeVersions(versions)
+    localStorage.setItem(KEY_DATA, JSON.stringify({ ...payload, _ts: Date.now() }))
   } catch {}
 }
 
 export function clearHomeCache() {
-  try { localStorage.removeItem(KEY_DATA) } catch {}
+  try {
+    localStorage.removeItem(KEY_DATA)
+  } catch {}
 }
 
-export function clearAllCache() {
-  clearHomeCache()
-  writeVersions(null)
-}
+export const clearAllCache = clearHomeCache

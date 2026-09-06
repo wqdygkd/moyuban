@@ -1,18 +1,25 @@
 <script setup>
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
-import { usePagination } from '@/composables/use-admin-table'
+import { useDragOrder } from '@/composables/use-drag-order'
+import { usePagination, useSelection } from '@/composables/use-pagination'
 import { categoryApi, subcategoryApi } from '@/services/api'
 
 const loading = ref(false)
 const saving = ref(false)
 const categories = ref([])
 const subcategories = ref([])
-const { page, pageSize, paged, selected, onSelectionChange } = usePagination(categories)
+const { page, pageSize, paged } = usePagination(categories)
+const { selected, onSelectionChange } = useSelection()
 const dialogVisible = ref(false)
 const formRef = ref()
-const defaultForm = () => ({ id: null, name: '', slug: '', icon: '', description: '', sort_order: 0 })
+const defaultForm = () => ({ id: null, name: '', slug: '', icon: '', description: '', sort_order: '' })
 const form = reactive(defaultForm())
+const { rowClassName, onDragStart, onDragEnter, persistOrder, savingOrder } = useDragOrder({
+  rows: categories,
+  save: (id, sort_order) => categoryApi.update(id, { sort_order }),
+  reload: loadData,
+})
 const rules = {
   name: [{ required: true, message: '请输入分类名称', trigger: 'blur' }],
   slug: [{ required: true, message: '请输入标识', trigger: 'blur' }],
@@ -50,8 +57,20 @@ async function save() {
   saving.value = true
   try {
     const { id, ...payload } = form
-    if (id) await categoryApi.update(id, payload)
-    else await categoryApi.create(payload)
+    if (id) {
+      if (!payload.sort_order) delete payload.sort_order
+      await categoryApi.update(id, payload)
+    } else {
+      if (!payload.sort_order) {
+        const keys = categories.value.map(c => c.sort_order).filter(Boolean).map(String)
+        let last
+        for (const key of keys) {
+          if (last === undefined || last < key) last = key
+        }
+        payload.sort_order = generateKeyBetween(last, undefined, BASE_62_DIGITS)
+      }
+      await categoryApi.create(payload)
+    }
     ElMessage.success(id ? '更新成功' : '新增成功')
     dialogVisible.value = false
     await loadData()
@@ -107,12 +126,26 @@ onMounted(loadData)
       </div>
     </div>
     <div class="table-card">
-      <el-table v-loading="loading" :data="paged" stripe @selection-change="onSelectionChange">
+      <el-table v-loading="loading || savingOrder" :data="paged" stripe row-key="id" :row-class-name="rowClassName" @selection-change="onSelectionChange">
         <el-table-column type="selection" width="48" />
+        <el-table-column label="" width="44">
+          <template #default="{ row, $index }">
+            <span
+              class="drag-handle"
+              title="拖拽排序"
+              draggable="true"
+              @dragstart="onDragStart(row)"
+              @dragenter="onDragEnter(row)"
+              @dragover.prevent
+              @drop="persistOrder"
+              @dragend="persistOrder"
+            >⠿</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="name" label="分类名称" width="160" />
         <el-table-column prop="slug" label="标识 (slug)" width="160" />
         <el-table-column prop="description" label="描述" show-overflow-tooltip />
-        <el-table-column prop="sort_order" label="排序" width="90" />
+        <el-table-column prop="sort_order" label="排序键" width="110" />
         <el-table-column label="子分类数" width="100">
           <template #default="{ row }">
             <el-tag size="small">
@@ -155,8 +188,8 @@ onMounted(loadData)
         <el-form-item label="描述">
           <el-input v-model="form.description" type="textarea" :rows="2" />
         </el-form-item>
-        <el-form-item label="排序">
-          <el-input-number v-model="form.sort_order" :min="0" />
+        <el-form-item label="排序键">
+          <el-input v-model="form.sort_order" placeholder="留空自动排到末尾" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -175,5 +208,18 @@ onMounted(loadData)
 .tb-pagination {
   margin-top: var(--space-4);
   justify-content: flex-end;
+}
+.drag-handle {
+  cursor: move;
+  color: var(--el-text-color-placeholder);
+  font-size: 16px;
+  user-select: none;
+  padding: 4px 8px;
+  &:hover {
+    color: var(--el-color-primary);
+  }
+}
+:deep(.drag-over td) {
+  border-top: 2px solid var(--el-color-primary);
 }
 </style>

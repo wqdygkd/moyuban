@@ -4,13 +4,29 @@ import FaviconImg from '@/components/FaviconImg.vue'
 import { siteApi } from '@/services/api'
 import { getFaviconCandidates } from '@/utils/favicon'
 
+defineOptions({ name: 'SiteCard' })
 const props = defineProps({ site: { type: Object, required: true } })
 const faviconCandidates = computed(() => {
-  if (props.site.image_url) return []
-  return getFaviconCandidates({ url: props.site.url, favicon_url: props.site.favicon_url })
+  // 前台图标优先级：favicon_url（手动）> image_url > 自动嗅探，失败逐个降级
+  const list = []
+  const manual = props.site.favicon_url?.trim()
+  if (manual) list.push(manual)
+  const img = props.site.image_url?.trim()
+  if (img && !list.includes(img)) list.push(img)
+  for (const u of getFaviconCandidates({ url: props.site.url })) {
+    if (!list.includes(u)) list.push(u)
+  }
+  return list
 })
+let clicked = false
 function handleClick() {
-  if (navigator.onLine && props.site.id) siteApi.incrementClick(props.site.id).catch(() => {})
+  // ponytail: fire-and-forget 单次点击防抖，避免重复写
+  if (clicked || !props.site.id) return
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return
+  clicked = true
+  siteApi.incrementClick(props.site.id).catch(() => {
+    clicked = false
+  })
 }
 </script>
 
@@ -18,8 +34,7 @@ function handleClick() {
   <a class="site-card" :href="site.url" target="_blank" rel="noopener" @click="handleClick">
     <div class="card-main">
       <span class="card-icon">
-        <img v-if="site.image_url" :src="site.image_url" :alt="site.name" width="36" height="36" loading="lazy">
-        <FaviconImg v-else-if="faviconCandidates.length" :candidates="faviconCandidates" :alt="site.name" :size="32" img-class="card-favicon">
+        <FaviconImg v-if="faviconCandidates.length" :candidates="faviconCandidates" :alt="site.name" :size="32" img-class="card-favicon">
           <span class="card-letter">{{ site.name[0] }}</span>
         </FaviconImg>
         <span v-else class="card-letter">{{ site.name[0] }}</span>

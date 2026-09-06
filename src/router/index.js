@@ -23,14 +23,21 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
-  scrollBehavior() { return { top: 0 } },
+  scrollBehavior(_to, _from, savedPosition) {
+    return savedPosition ?? { top: 0 }
+  },
 })
 
+let authInitPromise
 export function setupRouterGuard() {
   router.beforeEach(async (to) => {
     const auth = useAuthStore()
-    if (!auth.initialized)
-      await auth.init()
+    if (!auth.initialized) {
+      // 并发守卫只 init 一次，避免重复 getSession
+      // eslint-disable-next-line unicorn/no-top-level-assignment-in-function
+      authInitPromise ??= auth.init()
+      await authInitPromise
+    }
     if (to.meta.requiresAuth && !auth.isLoggedIn)
       return { name: 'login', query: { redirect: to.fullPath } }
     if (to.meta.guestOnly && auth.isLoggedIn)

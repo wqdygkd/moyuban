@@ -99,6 +99,9 @@
   font-weight: 500;
   min-height: 30px;
 }
+.engine-segmented.el-segmented .el-segmented__item-selected {
+  border-radius: var(--radius-full);
+}
 .engine-segmented.el-segmented .el-segmented__item.is-selected {
   box-shadow: var(--shadow-brand-sm);
 }
@@ -160,45 +163,6 @@
 }
 .search-btn.el-button:hover {
   box-shadow: var(--shadow-brand-md);
-}
-
-/* 快捷直达 */
-.hero-quick {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: var(--space-1);
-}
-.quick-label {
-  font-size: var(--text-foot);
-  color: rgb(var(--color-text-muted));
-}
-.quick-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: var(--radius-full);
-  border: 1px solid rgb(var(--color-border));
-  background: rgb(var(--color-bg-card) / 0.6);
-  color: rgb(var(--color-text-secondary));
-  font-size: var(--text-foot);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.quick-chip:hover {
-  color: rgb(var(--color-primary));
-  border-color: rgb(var(--color-border-active));
-  transform: translateY(-1px);
-}
-.quick-chip:active {
-  transform: translateY(0);
-}
-.quick-chip .el-icon {
-  font-size: 15px;
 }
 
 /* ---------- 骨架/空态 ---------- */
@@ -343,8 +307,8 @@
   white-space: nowrap;
 }
 .sub-icon-box {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 8px;
   background: rgb(var(--color-bg-card-hover));
   border: 1px solid rgb(var(--color-border) / 0.6);
@@ -356,8 +320,15 @@
 }
 .sub-icon-box .el-icon {
   font-size: 15px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
   color: rgb(var(--color-text-secondary));
   transition: color 0.2s;
+  margin-right: 0;
 }
 .sub-count {
   flex-shrink: 0;
@@ -389,28 +360,25 @@
   color: rgb(var(--color-primary));
   border-color: rgb(var(--color-primary) / 0.25);
 }
-.main-menu.el-menu .el-sub-menu.is-active > .el-sub-menu__title,
-.main-menu.el-menu .el-sub-menu.is-active > .el-sub-menu__title:hover,
+/* 滚动高亮：主状态（强） */
 .main-menu.el-menu .el-sub-menu.is-nav-active > .el-sub-menu__title,
 .main-menu.el-menu .el-sub-menu.is-nav-active > .el-sub-menu__title:hover {
   background: var(--bg-primary-active);
   color: rgb(var(--color-primary));
 }
-.main-menu.el-menu .el-sub-menu.is-active > .el-sub-menu__title .sub-icon-box,
 .main-menu.el-menu .el-sub-menu.is-nav-active > .el-sub-menu__title .sub-icon-box {
   background: rgb(var(--color-primary));
   border-color: rgb(var(--color-primary));
 }
-.main-menu.el-menu .el-sub-menu.is-active > .el-sub-menu__title .sub-icon-box .el-icon,
 .main-menu.el-menu .el-sub-menu.is-nav-active > .el-sub-menu__title .sub-icon-box .el-icon {
   color: var(--text-on-primary);
 }
-.main-menu.el-menu .el-sub-menu.is-active > .el-sub-menu__title .sub-count,
 .main-menu.el-menu .el-sub-menu.is-nav-active > .el-sub-menu__title .sub-count {
   background: rgb(var(--color-primary));
   color: var(--text-on-primary);
   border-color: rgb(var(--color-primary));
 }
+/* 过滤态父级不跟随高亮，仅保留滚动主态；子项高亮见下方 .el-menu-item.is-active */
 /* 激活态左侧 3px 指示条 */
 .main-menu.el-menu .el-sub-menu.is-nav-active > .el-sub-menu__title::before {
   content: '';
@@ -442,7 +410,7 @@
     color 0.2s;
 }
 .main-menu.el-menu .el-sub-menu__title:hover .el-sub-menu__icon-arrow,
-.main-menu.el-menu .el-sub-menu.is-active > .el-sub-menu__title .el-sub-menu__icon-arrow {
+.main-menu.el-menu .el-sub-menu.is-nav-active > .el-sub-menu__title .el-sub-menu__icon-arrow {
   color: rgb(var(--color-primary));
 }
 .main-menu.el-menu .el-sub-menu__title:hover .el-sub-menu__icon-arrow {
@@ -453,10 +421,10 @@
   background: rgb(var(--color-bg-card-hover));
 }
 
-/* ---------- 子分类（menu-item）——圆点指示、更留白 ---------- */
+/* ---------- 子分类（menu-item）——与主菜单文字对齐 ---------- */
 .main-menu.el-menu .el-menu-item {
   height: 30px;
-  padding-left: 16px !important;
+  padding-left: 38px !important;
   margin: 2px 0;
   border-radius: 10px;
   font-size: 0.82rem;
@@ -515,6 +483,8 @@
 }
 .category-section {
   margin-bottom: calc(var(--space-9) - var(--space-1));
+  content-visibility: auto;
+  contain-intrinsic-size: auto 600px;
 }
 .section-header {
   display: flex;
@@ -587,10 +557,10 @@
 }
 .child-tabs .el-check-tag {
   border-radius: var(--radius-full);
-  border: 1px solid var(--border-soft);
+  border: 0.5px solid var(--border-soft);
   background: transparent;
   color: rgb(var(--color-text-secondary));
-  padding: var(--space-2) var(--space-4);
+  padding: 3px var(--space-3);
   font-size: var(--text-sm);
   font-weight: 500;
   line-height: 1.4;
@@ -617,16 +587,17 @@
 /* ---------- 卡片入场动画 ---------- */
 .category-section .site-card {
   opacity: 0;
+  will-change: transform, opacity;
 }
 .category-section.inview .site-card {
   opacity: 1;
-  animation: card-rise 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
-  animation-delay: calc(var(--i, 0) * 45ms);
+  animation: card-rise 0.38s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 22ms);
 }
 @keyframes card-rise {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
@@ -637,6 +608,7 @@
   .category-section .site-card {
     opacity: 1;
     animation: none;
+    will-change: auto;
   }
 }
 

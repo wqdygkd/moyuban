@@ -1,7 +1,7 @@
 <script setup>
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ref } from 'vue'
-import { database } from '@/lib/supabase'
+import { assertSupabase, clearTables } from '@/lib/supabase'
 import { categoryApi } from '@/services/api'
 import { exportDump, importDump, summarizeDump } from '@/services/import-api'
 
@@ -59,11 +59,11 @@ async function parseByUrl() {
 }
 
 function buildTree(json) {
-  const cats = json?.categoryTree?.categories || json?.categories || []
+  const cats = json?.categoryTree?.categories || []
   treeData.value = cats.map((c, i) => ({
     key: i,
     name: c.name,
-    subs: (c.children || c.subcategories || []).map(s => s.name),
+    subs: (c.children || []).map(s => s.name),
   }))
 }
 function previewTree() {
@@ -127,6 +127,7 @@ async function handleExport() {
 }
 
 async function handleClearAll() {
+  assertSupabase()
   await ElMessageBox.confirm('确定清空数据库中的所有网址、子分类和分类吗？此操作不可恢复！', '数据清理', {
     confirmButtonText: '全部清空',
     cancelButtonText: '取消',
@@ -134,11 +135,7 @@ async function handleClearAll() {
   })
   clearing.value = true
   try {
-    const tables = ['sites', 'subcategories', 'categories']
-    for (const table of tables) {
-      const { error } = await database.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000')
-      if (error) throw new Error(`清空 ${table} 失败: ${error.message}`)
-    }
+    await clearTables(['sites', 'subcategories', 'categories'])
     ElMessage.success('已清空全部数据')
   } catch (e) {
     ElMessage.error(`清理失败：${e.message}`)

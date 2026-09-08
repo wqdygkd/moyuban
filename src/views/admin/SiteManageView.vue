@@ -9,7 +9,7 @@ import { getFaviconCandidates, getFaviconSource } from '@/utils/favicon'
 const loading = ref(false)
 const saving = ref(false)
 const keyword = ref('')
-const filterCategory = ref('')
+const filterPath = ref([])
 const categories = ref([])
 const subcategories = ref([])
 const sites = ref([])
@@ -60,6 +60,14 @@ const rules = {
 const subMap = computed(() => new Map(subcategories.value.map(s => [s.id, s])))
 const catMap = computed(() => new Map(categories.value.map(c => [c.id, c.name])))
 const subsForCat = computed(() => subcategories.value.filter(s => s.category_id === form.category_id))
+const cascaderOptions = computed(() =>
+  categories.value.map(c => ({
+    value: c.id,
+    label: c.name,
+    children: subcategories.value.filter(s => s.category_id === c.id).map(s => ({ value: s.id, label: s.name })),
+  })),
+)
+const cascaderProps = { checkStrictly: true, emitPath: true, expandTrigger: 'hover' }
 function catOf(subId) {
   const sub = subMap.value.get(subId)
   return sub ? catMap.value.get(sub.category_id) || '-' : '-'
@@ -89,13 +97,17 @@ async function fetchPaged() {
   loading.value = true
   try {
     let subcategoryIds
-    if (filterCategory.value) {
-      subcategoryIds = subcategories.value.filter(s => s.category_id === filterCategory.value).map(s => s.id)
+    const path = Array.isArray(filterPath.value) ? filterPath.value : []
+    if (path.length === 1) {
+      const catId = path[0]
+      subcategoryIds = subcategories.value.filter(s => s.category_id === catId).map(s => s.id)
       if (!subcategoryIds.length) {
         sites.value = []
         total.value = 0
         return
       }
+    } else if (path.length === 2) {
+      subcategoryIds = [path[1]]
     }
     const { data, total: t } = await siteApi.listPaged({ page: page.value, pageSize: pageSize.value, keyword: keyword.value.trim(), subcategoryIds })
     sites.value = data
@@ -125,9 +137,9 @@ watch(keyword, () => {
   searchTimer = setTimeout(() => {
     if (page.value === 1) fetchPaged()
     else page.value = 1
-  }, 300)
+  }, 200)
 })
-watch(filterCategory, () => {
+watch(filterPath, () => {
   if (page.value === 1) fetchPaged()
   else page.value = 1
 })
@@ -204,10 +216,18 @@ onMounted(loadData)
 <template>
   <div class="site-manage ui-page ui-page--wide">
     <div class="tb-toolbar">
-      <el-input v-model="keyword" placeholder="搜索网站名称/网址/描述" clearable class="tb-search" :prefix-icon="Search" />
-      <el-select v-model="filterCategory" placeholder="按分类筛选" clearable class="tb-select">
-        <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
-      </el-select>
+      <el-input v-model="keyword" placeholder="搜索名称/网址" clearable class="tb-search" :prefix-icon="Search" />
+      <el-cascader
+        v-model="filterPath"
+        :options="cascaderOptions"
+        :props="cascaderProps"
+        placeholder="按分类 / 子分类筛选"
+        clearable
+        collapse-tags
+        collapse-tags-tooltip
+        class="tb-select tb-cascader"
+        :show-all-levels="false"
+      />
       <div class="tb-right">
         <el-button v-if="selected.length" type="danger" @click="handleBatchDelete">
           批量删除 ({{ selected.length }})
@@ -429,9 +449,108 @@ onMounted(loadData)
 .url-cell {
   color: var(--el-color-primary);
 }
+.site-manage .tb-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--card-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  padding: 10px 12px;
+  box-shadow: var(--shadow-card);
+  margin-bottom: var(--space-4);
+}
+.site-manage .tb-toolbar::-webkit-scrollbar {
+  display: none;
+}
+.site-manage .tb-search {
+  width: 200px;
+  flex: 0 1 200px;
+  min-width: 160px;
+}
+.site-manage .tb-cascader {
+  width: 220px;
+  flex: 0 1 220px;
+  min-width: 180px;
+}
+.site-manage .tb-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding-left: 12px;
+  border-left: 1px solid var(--border-soft);
+}
+:deep(.tb-search .el-input__wrapper),
+:deep(.tb-cascader .el-input__wrapper) {
+  border-radius: var(--radius-md);
+  background: rgb(var(--color-bg-card-hover));
+  box-shadow: none;
+  border: 1px solid transparent;
+  transition:
+    border-color 0.2s,
+    background 0.2s,
+    box-shadow 0.2s;
+  padding: 1px 10px;
+}
+:deep(.tb-search .el-input__wrapper.is-focus),
+:deep(.tb-cascader .el-input__wrapper.is-focus) {
+  background: var(--card-bg);
+  border-color: rgb(var(--color-primary) / 0.35);
+  box-shadow: var(--ring-focus);
+}
+:deep(.tb-search .el-input__inner),
+:deep(.tb-cascader .el-input__inner) {
+  font-size: var(--text-sm);
+}
+.table-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  padding: 0;
+}
+.table-card :deep(.el-table) {
+  --el-table-header-bg-color: rgb(var(--color-bg-card-hover));
+  --el-table-tr-bg-color: transparent;
+  --el-table-row-hover-bg-color: rgb(var(--color-bg-card-hover) / 0.7);
+}
+.table-card :deep(.el-table th.el-table__cell) {
+  background: rgb(var(--color-bg-card-hover));
+  color: var(--text-sub);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-soft) !important;
+  padding: 10px 0;
+}
+.table-card :deep(.el-table td.el-table__cell) {
+  padding: 11px 0;
+  border-bottom: 1px solid rgb(var(--color-border) / 0.5);
+  font-size: var(--text-sm);
+}
+.table-card :deep(.el-table .el-table__row:last-child td) {
+  border-bottom: none;
+}
+.table-card :deep(.el-table .el-table__row:hover td) {
+  background: rgb(var(--color-bg-card-hover) / 0.55) !important;
+}
 .tb-pagination {
-  margin-top: var(--space-4);
-  justify-content: flex-end;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: 12px 14px;
+  border-top: 1px solid var(--border-soft);
+  background: rgb(var(--color-bg-card-hover) / 0.35);
+  margin-top: 0;
 }
 .tag-gap {
   margin-right: var(--space-1);

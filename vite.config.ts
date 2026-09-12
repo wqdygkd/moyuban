@@ -61,12 +61,18 @@ export default defineConfig({
               networkTimeoutSeconds: 5,
             },
           },
+          // 图标缓存白名单，只收两类 URL：
+          // 1. 两个第三方 favicon 服务（带查询参数，无图片扩展名）；
+          // 2. 各站点自己域名下的 /favicon.svg|/favicon.png——候选链前两级直连图标，
+          //    域名不限但路径固定，本站同域 favicon 也走这里。
+          // 除此之外的外站图片（手填 image_url、第三方图床等）一律不做 PWA 缓存。
+          // 跨域 <img> 是 no-cors opaque 响应（status 0），不放行就进不了缓存。
           {
-            urlPattern: /^https:\/\/(faviconsnap\.com|icon\.horse|www\.google\.com\/s2\/favicons).*/i,
+            urlPattern: /^https:\/\/(faviconsnap\.com|icon\.horse|[^/]+\/favicon\.(?:svg|png)).*/i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'favicons',
-              expiration: { maxEntries: 200, maxAgeSeconds: 604_800 },
+              expiration: { maxEntries: 1000, maxAgeSeconds: 604_800, purgeOnQuotaError: true },
               cacheableResponse: { statuses: [0, 200] },
             },
           },

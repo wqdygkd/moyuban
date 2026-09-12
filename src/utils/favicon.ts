@@ -12,7 +12,6 @@ export function getFaviconSource(url = ''): string {
   if (url.endsWith('/favicon.png')) return '直连 · png'
   if (url.includes('faviconsnap.com')) return 'FaviconSnap'
   if (url.includes('icon.horse')) return 'Icon Horse'
-  if (url.includes('google.com/s2/favicons')) return 'Google S2'
   return '手动'
 }
 
@@ -43,7 +42,6 @@ export function getFaviconCandidates({ url, favicon_url }: FaviconTarget = {}, e
     push(`https://${host}/favicon.png`)
     push(`https://faviconsnap.com/api/favicon?url=${host}&size=128`)
     push(`https://icon.horse/icon/${host}?size=128`)
-    push(`https://www.google.com/s2/favicons?domain=${host}&sz=128`)
   }
   faviconCache.set(key, list)
   return list

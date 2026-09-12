@@ -296,10 +296,30 @@ async function handleClearAll() {
 <style scoped lang="scss">
 .intro {
   margin-bottom: 16px;
+  border-radius: var(--radius-card);
+  :deep(.el-alert__content) {
+    font-size: var(--text-sm);
+  }
 }
 
 .panel {
   margin-bottom: 16px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  :deep(.el-card__header) {
+    background: rgb(var(--color-bg-card-hover));
+    border-bottom: 1px solid var(--border-soft);
+    padding: 12px 14px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-main);
+  }
+  :deep(.el-card__body) {
+    padding: 16px 14px;
+  }
 }
 
 .file-zone {

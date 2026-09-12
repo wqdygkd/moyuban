@@ -3,10 +3,17 @@ import { ElMessage } from 'element-plus'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
+import { useTheme } from '@/utils/theme'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const theme = useTheme()
+const THEME_LABEL = { douyin: '抖音', xhs: '小红书', kuaishou: '快手', shipinhao: '视频号' }
+const currentTheme = computed(() => theme.current.value)
+function onThemeCommand(t) {
+  theme.set(t)
+}
 
 const pageTitle = computed(() => {
   const map = {
@@ -69,12 +76,30 @@ async function handleLogout() {
           <div class="admin-title">
             {{ pageTitle }}
           </div>
-          <div class="admin-user">
-            <span class="admin-email">{{ auth.user?.email }}</span>
-            <el-button text @click="handleLogout">
-              <el-icon><SwitchButton /></el-icon>
-              退出
-            </el-button>
+          <div class="admin-header-right">
+            <el-dropdown trigger="click" @command="onThemeCommand">
+              <button class="theme-toggle" title="切换主题">
+                <span class="theme-dot" :class="`dot-${currentTheme}`" />
+                <span class="theme-toggle-label">{{ THEME_LABEL[currentTheme] || currentTheme }}</span>
+                <el-icon class="theme-caret">
+                  <ArrowDown />
+                </el-icon>
+              </button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-for="t in theme.THEMES" :key="t" :command="t" class="theme-dropdown-item" :class="{ 'theme-active': t === currentTheme }">
+                    <span class="theme-dot" :class="`dot-${t}`" />{{ THEME_LABEL[t] || t }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+            <div class="admin-user">
+              <span class="admin-email">{{ auth.user?.email }}</span>
+              <el-button text @click="handleLogout">
+                <el-icon><SwitchButton /></el-icon>
+                退出
+              </el-button>
+            </div>
           </div>
         </el-header>
         <el-main class="admin-main">
@@ -92,7 +117,7 @@ async function handleLogout() {
 }
 
 .admin-aside {
-  background: rgb(var(--aside-bg));
+  background: linear-gradient(180deg, rgb(var(--color-primary) / 0.08), transparent 320px), rgb(var(--aside-bg));
   color: var(--text-on-primary);
   height: 100vh;
   position: sticky;
@@ -100,6 +125,7 @@ async function handleLogout() {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  border-right: 1px solid rgb(var(--color-primary) / 0.08);
 }
 
 .admin-brand {
@@ -109,6 +135,18 @@ async function handleLogout() {
   font-weight: 700;
   padding: var(--space-5) var(--space-4);
   font-size: var(--text-md);
+  border-bottom: 1px solid var(--aside-divider);
+  position: relative;
+  &::after {
+    content: '';
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: -1px;
+    height: 1px;
+    background: var(--grad-brand);
+    opacity: 0.55;
+  }
 }
 
 .admin-logo {
@@ -122,23 +160,39 @@ async function handleLogout() {
   justify-content: center;
   font-size: 17px;
   font-weight: 700;
+  box-shadow: var(--shadow-brand-sm);
 }
 
 .admin-menu {
   background: transparent;
   border-right: none;
   flex: 1;
+  padding: var(--space-2) var(--space-2);
 
   :deep(.el-menu-item) {
     color: rgb(var(--aside-text));
+    border-radius: var(--radius-md);
+    margin: 2px 0;
+    height: 38px;
+    line-height: 38px;
+    transition:
+      background 0.2s,
+      color 0.2s,
+      box-shadow 0.2s;
 
     &:hover {
-      background: var(--aside-hover);
+      background: rgb(var(--color-primary) / 0.1);
+      color: var(--el-color-primary-light-3);
     }
 
     &.is-active {
-      background: var(--el-color-primary);
+      background: var(--grad-brand);
       color: var(--text-on-primary);
+      box-shadow: var(--shadow-brand-sm);
+    }
+
+    .el-icon {
+      font-size: 16px;
     }
   }
 }
@@ -149,6 +203,11 @@ async function handleLogout() {
 
   .el-button {
     color: rgb(var(--aside-text));
+    border-radius: var(--radius-md);
+    &:hover {
+      background: rgb(var(--color-primary) / 0.1);
+      color: var(--el-color-primary-light-3);
+    }
   }
 }
 
@@ -167,6 +226,12 @@ async function handleLogout() {
   color: var(--text-main);
 }
 
+.admin-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
 .admin-user {
   display: flex;
   align-items: center;
@@ -176,6 +241,32 @@ async function handleLogout() {
 .admin-email {
   font-size: var(--text-foot);
   color: var(--text-sub);
+}
+
+.theme-toggle {
+  height: 34px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-full);
+  background: var(--card-bg);
+  color: var(--text-sub);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  &:hover {
+    color: var(--el-color-primary);
+    border-color: var(--el-color-primary-light-8);
+    background: var(--el-color-primary-light-9);
+  }
+}
+.theme-toggle-label {
+  font-size: var(--text-foot);
+  font-weight: 500;
+}
+.theme-caret {
+  font-size: 12px;
 }
 
 .admin-main {

@@ -6,6 +6,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/', name: 'home', component: () => import('@/views/HomeView.vue') },
   { path: '/login', name: 'login', component: () => import('@/views/LoginView.vue'), meta: { guestOnly: true } },
   { path: '/category/:id', name: 'category', component: () => import('@/views/CategoryView.vue') },
+  { path: '/search', name: 'search', component: () => import('@/views/SearchView.vue') },
   {
     path: '/admin',
     name: 'admin',

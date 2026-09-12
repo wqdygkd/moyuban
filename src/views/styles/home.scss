@@ -82,6 +82,15 @@
   font-style: normal;
 }
 
+/* SiteSearch 组件的外壳：layout-search 为窄性 flex 居中，组件需撑满并纵向排布 */
+.site-search {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+}
+
 /* 引擎切换 el-segmented —— 胶囊段选 */
 .engine-segmented.el-segmented {
   --el-segmented-bg-color: rgb(var(--color-bg-card));

@@ -85,6 +85,7 @@
     "useRoute": true,
     "useRouter": true,
     "useSelection": true,
+    "useSiteSearch": true,
     "useSlots": true,
     "useTableSortable": true,
     "useTemplateRef": true,

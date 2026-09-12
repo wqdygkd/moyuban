@@ -91,7 +91,10 @@ export default defineConfig({
   build: {
     target: 'esnext',
     cssMinify: 'esbuild',
-    cssCodeSplit: true,
+    // 关闭 CSS 按块拆分：home.scss 被 HomeView/CategoryView/SearchView 三个路由共享，
+    // 拆分时它只随 HomeView 的 CSS 块下发，直接打开 /search 或 /category/:id 会缺样式
+    // （搜索框不居中、卡片网格错乱）。全站 CSS 仅几十 KB，合成单文件并进 PWA 预缓存更稳。
+    cssCodeSplit: false,
     chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {

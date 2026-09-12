@@ -13,6 +13,7 @@ declare module 'vue' {
   export interface GlobalComponents {
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElAside: typeof import('element-plus/es')['ElAside']
+    ElAutocomplete: typeof import('element-plus/es')['ElAutocomplete']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElCard: typeof import('element-plus/es')['ElCard']
     ElCascader: typeof import('element-plus/es')['ElCascader']
@@ -50,11 +51,13 @@ declare module 'vue' {
     ElUpload: typeof import('element-plus/es')['ElUpload']
     FaviconField: typeof import('./components/FaviconField.vue')['default']
     FaviconImg: typeof import('./components/FaviconImg.vue')['default']
+    HighlightText: typeof import('./components/HighlightText.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SiteCard: typeof import('./components/SiteCard.vue')['default']
     SiteFooter: typeof import('./components/SiteFooter.vue')['default']
     SiteHeader: typeof import('./components/SiteHeader.vue')['default']
+    SiteSearch: typeof import('./components/SiteSearch.vue')['default']
     ThemeSwitcher: typeof import('./components/ThemeSwitcher.vue')['default']
   }
   export interface GlobalDirectives {

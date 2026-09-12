@@ -72,6 +72,7 @@ declare global {
   const useRoute: typeof import('vue-router').useRoute
   const useRouter: typeof import('vue-router').useRouter
   const useSelection: typeof import('./composables/use-pagination').useSelection
+  const useSiteSearch: typeof import('./composables/use-site-search').useSiteSearch
   const useSlots: typeof import('vue').useSlots
   const useTableSortable: typeof import('./composables/use-drag-order').useTableSortable
   const useTemplateRef: typeof import('vue').useTemplateRef
@@ -165,6 +166,7 @@ declare module 'vue' {
     readonly useRoute: UnwrapRef<typeof import('vue-router')['useRoute']>
     readonly useRouter: UnwrapRef<typeof import('vue-router')['useRouter']>
     readonly useSelection: UnwrapRef<typeof import('./composables/use-pagination')['useSelection']>
+    readonly useSiteSearch: UnwrapRef<typeof import('./composables/use-site-search')['useSiteSearch']>
     readonly useSlots: UnwrapRef<typeof import('vue')['useSlots']>
     readonly useTableSortable: UnwrapRef<typeof import('./composables/use-drag-order')['useTableSortable']>
     readonly useTemplateRef: UnwrapRef<typeof import('vue')['useTemplateRef']>

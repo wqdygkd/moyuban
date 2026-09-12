@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { SiteHome } from '@/types'
 import FaviconImg from '@/components/FaviconImg.vue'
+import HighlightText from '@/components/HighlightText.vue'
 import { siteApi } from '@/services/api'
 import { getFaviconCandidates } from '@/utils/favicon'
 
@@ -8,8 +9,11 @@ defineOptions({ name: 'SiteCard' })
 const props = withDefaults(defineProps<{
   site: SiteHome
   editMode?: boolean
+  /** 搜索结果页传入分词，命中片段高亮；其他场景不传不高亮 */
+  highlight?: string[]
 }>(), {
   editMode: false,
+  highlight: undefined,
 })
 const emit = defineEmits<{
   edit: []
@@ -50,9 +54,13 @@ function onCardClick(e: MouseEvent): void {
       </span>
       <div class="card-body">
         <div class="card-title-row">
-          <span class="card-title ellipsis">{{ site.name }}</span>
+          <span class="card-title ellipsis">
+            <HighlightText :text="site.name" :tokens="highlight" />
+          </span>
         </div>
-        <p class="card-desc ellipsis" :title="site.description ?? ''">{{ site.description || '—' }}</p>
+        <p class="card-desc ellipsis" :title="site.description ?? ''">
+          <HighlightText :text="site.description || '—'" :tokens="highlight" />
+        </p>
       </div>
     </div>
     <span v-if="site.is_hot || site.is_featured" class="card-flags">

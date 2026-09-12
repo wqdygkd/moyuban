@@ -6,6 +6,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import Sortable from 'sortablejs'
 import FaviconField from '@/components/FaviconField.vue'
 import SiteCard from '@/components/SiteCard.vue'
+import SiteSearch from '@/components/SiteSearch.vue'
 import { useDragOrder } from '@/composables/use-drag-order'
 import { useHomeData } from '@/composables/use-home-data'
 import { categoryApi, siteApi, subcategoryApi } from '@/services/api'
@@ -49,31 +50,6 @@ function greeting(): string {
   if (h < 14) return '中午好，吃饱了才好摸鱼'
   if (h < 18) return '下午好，摸鱼人'
   return '晚上好，今天的班辛苦啦'
-}
-
-type SearchEngine = 'site' | 'baidu' | 'bing' | 'google'
-const engineOptions: Array<{ label: string, value: SearchEngine }> = [
-  { label: '本站', value: 'site' },
-  { label: '百度', value: 'baidu' },
-  { label: '必应', value: 'bing' },
-  { label: '谷歌', value: 'google' },
-]
-const searchEngine = ref<SearchEngine>('site')
-const keyword = ref('')
-const searchPlaceholder = computed(
-  () => ({ site: '在本站内搜索网址…', baidu: '百度一下，你就知道…', bing: '必应搜索…', google: 'Google 搜索…' })[searchEngine.value],
-)
-
-function doSearch(): void {
-  if (!keyword.value?.trim()) return
-  const q = encodeURIComponent(keyword.value.trim())
-  const targets: Record<SearchEngine, string> = {
-    baidu: `https://www.baidu.com/s?wd=${q}`,
-    bing: `https://www.bing.com/search?q=${q}`,
-    google: `https://www.google.com/search?q=${q}`,
-    site: `/search?q=${q}`,
-  }
-  window.open(targets[searchEngine.value] || targets.site, '_blank')
 }
 
 // ---------- 编辑模式开关（前置声明：左侧菜单点击改道要用到） ----------
@@ -713,16 +689,7 @@ onBeforeUnmount(() => {
             已收录 <b>{{ sites.length }}</b> 个摸鱼入口 <i>·</i> 覆盖 <b>{{ categories.length }}</b> 个分类
           </p>
         </div>
-        <el-segmented v-model="searchEngine" class="engine-segmented" :options="engineOptions" size="large" />
-        <form class="search-form" role="search" @submit.prevent="doSearch">
-          <el-icon class="search-icon">
-            <Search />
-          </el-icon>
-          <el-input v-model.trim="keyword" class="search-field" :placeholder="searchPlaceholder" @keyup.enter="doSearch" />
-          <el-button class="search-btn" type="primary" round @click="doSearch">
-            搜索
-          </el-button>
-        </form>
+        <SiteSearch show-engines />
       </div>
     </div>
 

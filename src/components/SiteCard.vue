@@ -5,7 +5,11 @@ import { siteApi } from '@/services/api'
 import { getFaviconCandidates } from '@/utils/favicon'
 
 defineOptions({ name: 'SiteCard' })
-const props = defineProps({ site: { type: Object, required: true } })
+const props = defineProps({
+  site: { type: Object, required: true },
+  editMode: { type: Boolean, default: false },
+})
+const emit = defineEmits(['edit'])
 const faviconCandidates = computed(() => {
   // 前台图标优先级：favicon_url（手动）> image_url > 自动嗅探，失败逐个降级
   const list = []
@@ -28,10 +32,19 @@ function handleClick() {
     clicked = false
   })
 }
+function onCardClick(e) {
+  // 编辑模式下点击卡片不再跳转，交给外层打开编辑弹窗
+  if (props.editMode) {
+    e.preventDefault()
+    emit('edit')
+    return
+  }
+  handleClick()
+}
 </script>
 
 <template>
-  <a class="site-card" :href="site.url" target="_blank" rel="noopener" @click="handleClick">
+  <a class="site-card" :class="{ 'is-editable': editMode }" :href="site.url" :data-site-id="site.id" target="_blank" rel="noopener" :draggable="editMode" @click="onCardClick">
     <div class="card-main">
       <span class="card-icon">
         <FaviconImg v-if="faviconCandidates.length" :candidates="faviconCandidates" :alt="site.name" :size="32" img-class="card-favicon">
@@ -50,6 +63,9 @@ function handleClick() {
       <span v-if="site.is_hot" class="flag flag-hot">火</span>
       <span v-if="site.is_featured" class="flag flag-rec">荐</span>
     </span>
+    <button v-if="editMode" type="button" class="card-edit-btn" title="编辑网址" @click.stop.prevent="emit('edit')">
+      <el-icon><EditPen /></el-icon>
+    </button>
   </a>
 </template>
 
@@ -184,6 +200,57 @@ function handleClick() {
   }
   &.flag-rec {
     background: rgb(var(--color-primary));
+  }
+}
+
+/* ---------- 编辑模式 ---------- */
+.site-card.is-editable {
+  cursor: grab;
+  border-style: dashed;
+  &:active {
+    cursor: grabbing;
+  }
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: rgb(var(--color-primary) / 0.04);
+    pointer-events: none;
+  }
+}
+.is-dragging.site-card {
+  opacity: 0.45;
+  transform: scale(0.97);
+  cursor: grabbing;
+}
+.card-edit-btn {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  z-index: 2;
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgb(var(--color-border-active));
+  border-radius: var(--radius-sm);
+  background: rgb(var(--color-bg-card));
+  color: rgb(var(--color-primary));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.2s,
+    transform 0.2s,
+    box-shadow 0.2s;
+  .site-card.is-editable:hover & {
+    opacity: 1;
+    &:hover {
+      transform: scale(1.1);
+      box-shadow: var(--shadow-brand-sm);
+    }
   }
 }
 </style>

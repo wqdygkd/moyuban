@@ -299,13 +299,6 @@
   overflow: hidden;
   cursor: pointer;
 }
-.main-menu.el-menu .sub-title-hit > span:nth-child(2) {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .sub-icon-box {
   width: 24px;
   height: 24px;
@@ -424,7 +417,7 @@
 /* ---------- 子分类（menu-item）——与主菜单文字对齐 ---------- */
 .main-menu.el-menu .el-menu-item {
   height: 30px;
-  padding-left: 38px !important;
+  padding-left: 48px !important;
   margin: 2px 0;
   border-radius: 10px;
   font-size: 0.82rem;
@@ -435,22 +428,10 @@
   align-items: center;
   gap: 8px;
 }
-.sub-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: rgb(var(--color-border));
-  flex-shrink: 0;
-  transition: all 0.2s;
-}
 .main-menu.el-menu .el-menu-item:hover {
   color: rgb(var(--color-primary));
   background: var(--bg-primary-soft);
   transform: translateX(2px);
-}
-.main-menu.el-menu .el-menu-item:hover .sub-dot {
-  background: rgb(var(--color-primary) / 0.7);
-  transform: scale(1.25);
 }
 .main-menu.el-menu .el-menu-item.is-active,
 .main-menu.el-menu .el-menu-item.is-active:hover {
@@ -458,10 +439,6 @@
   background: var(--bg-primary-active);
   font-weight: 600;
   transform: none;
-}
-.main-menu.el-menu .el-menu-item.is-active .sub-dot {
-  background: rgb(var(--color-primary));
-  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.18);
 }
 
 .menu-toggle.el-button {
@@ -584,6 +561,53 @@
   gap: var(--space-4);
 }
 
+/* ---------- 编辑模式 ---------- */
+.edit-toggle.el-button {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  z-index: 2;
+  background: rgb(var(--color-bg-card));
+  border-color: rgb(var(--color-border));
+  color: rgb(var(--color-text-secondary));
+  &.el-button--primary {
+    background: rgb(var(--color-primary));
+    border-color: rgb(var(--color-primary));
+    color: var(--text-on-primary);
+  }
+  .edit-toggle-icon {
+    margin-right: 4px;
+  }
+}
+
+/* ---------- 编辑模式提示条：与正文容器同宽（page-home-content 内整行） ---------- */
+.edit-banner {
+  width: 100%;
+  margin-bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px dashed rgb(var(--color-primary) / 0.5);
+  border-radius: var(--radius-md);
+  background: rgb(var(--color-primary) / 0.06);
+  color: rgb(var(--color-primary));
+  font-size: var(--text-sm);
+}
+
+/* 编辑模式下网格整体提示可拖拽 */
+.card-grid.is-edit {
+  outline: 1px dashed rgb(var(--color-border-active) / 0.4);
+  outline-offset: 12px;
+  border-radius: var(--radius-md);
+}
+
+/* Sortable 拖拽占位 */
+.site-card.sort-ghost {
+  opacity: 0.45;
+  box-shadow: 0 0 0 2px rgb(var(--color-primary));
+}
+
 /* ---------- 卡片入场动画 ---------- */
 .category-section .site-card {
   opacity: 0;
@@ -695,4 +719,35 @@
   .card-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* ---------- 左侧菜单：编辑模式拖拽手柄 ---------- */
+.main-menu.el-menu .el-sub-menu__title > .sub-title-hit:has(.menu-drag) {
+  gap: 6px;
+}
+.main-menu .menu-drag {
+  cursor: grab;
+  color: var(--el-text-color-placeholder);
+  font-size: 12px;
+  line-height: 1;
+  user-select: none;
+  flex-shrink: 0;
+  &:active {
+    cursor: grabbing;
+  }
+  &:hover {
+    color: rgb(var(--color-primary));
+  }
+}
+.sub-title-hit > .sub-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.main-menu .menu-ghost {
+  opacity: 0.45;
+  background: rgb(var(--color-primary) / 0.08);
+  border-radius: 8px;
 }

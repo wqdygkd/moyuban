@@ -1,9 +1,16 @@
 <script setup>
+import { ElMessage, ElMessageBox } from 'element-plus'
+import Sortable from 'sortablejs'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import FaviconField from '@/components/FaviconField.vue'
 import SiteCard from '@/components/SiteCard.vue'
-import { fetchCategories, fetchSites, fetchSubcategories, metaApi } from '@/services/api'
+import { useDragOrder } from '@/composables/use-drag-order'
+import { categoryApi, fetchCategories, fetchSites, fetchSubcategories, metaApi, siteApi, subcategoryApi } from '@/services/api'
+import { useAuthStore } from '@/store/auth'
 import { readHomeCache, writeHomeCache } from '@/utils/cache'
+import { getFaviconCandidates } from '@/utils/favicon'
 
+const auth = useAuthStore()
 const loading = ref(true)
 const error = ref('')
 const categories = ref([])
@@ -63,6 +70,12 @@ function doSearch() {
   window.open(targets[searchEngine.value] || targets.site, '_blank')
 }
 
+// ---------- 编辑模式开关（前置声明：左侧菜单点击改道要用到） ----------
+const editMode = ref(false)
+watch(() => auth.isLoggedIn, (v) => {
+  if (!v) editMode.value = false
+})
+
 // ---------- 左侧菜单：左右双向联动 ----------
 const leftActive = ref('')
 const leftOpeneds = computed(() => {
@@ -73,6 +86,15 @@ const leftOpeneds = computed(() => {
   return []
 })
 function onMenuSelect(index) {
+  // 编辑模式下点二级菜单直接进编辑，不做导航筛选
+  if (editMode.value && !index.startsWith('feature')) {
+    const sep = index.indexOf('::')
+    if (sep > 0) {
+      const sub = subcategories.value.find(s => String(s.id) === index.slice(sep + 2))
+      if (sub) return openSubDialog(sub)
+    }
+    return
+  }
   if (index.startsWith('feature-')) {
     leftActive.value = index
     return setRecMode(index === 'feature-new' ? 'new' : 'hot')
@@ -88,7 +110,7 @@ function onMenuSelect(index) {
   }
 }
 watch(leftOpeneds, (ids) => {
-  nextTick(() => ids.forEach((id) => menuRef.value?.open?.(id)))
+  nextTick(() => ids.forEach(id => menuRef.value?.open?.(id)))
 })
 
 // ---------- 派生数据（Map 索引避免每行 filter） ----------
@@ -123,10 +145,12 @@ const sitesByCat = computed(() => {
   }
   return m
 })
+// 推荐列表从主数组派生（保持与拖拽排序同步），热门/最新只是过滤视角
+const featuredSites = computed(() => sites.value.filter(s => s.is_featured))
 const featuredList = computed(() => {
-  if (recMode.value === 'new') return [...featured.value].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
-  const hot = featured.value.filter(s => s.is_hot)
-  return hot.length ? hot : featured.value
+  if (recMode.value === 'new') return [...featuredSites.value].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+  const hot = featuredSites.value.filter(s => s.is_hot)
+  return hot.length ? hot : featuredSites.value
 })
 function subsOf(id) {
   return subsByCat.value.get(id) || []
@@ -191,7 +215,7 @@ function toggleSub(cat, sub) {
     activeSub[cat.id] = null
     activeSub[String(cat.id)] = null
   }
-  leftActive.value = next ? `${cat.id}::${next}` : ''
+  // 右侧点击只切筛选，不碰 leftActive，避免左侧菜单自动展开
 }
 function setRecMode(mode) {
   recMode.value = mode
@@ -255,6 +279,348 @@ async function loadData({ silent = false, force = false } = {}) {
     loading.value = false
     await setupReveal()
     setupActiveObserver()
+    initGridSortables()
+    initMenuSortables()
+    refreshSortableDisabled()
+  }
+}
+
+// ---------- 编辑模式（登录后）：拖拽排序 + 卡片编辑 ----------
+
+// 把当前内存数据同步回首页缓存（写库后 DB 触发器会自增 app_meta 版本，
+// 其余端靠版本探测自动刷新；本端直接同步保证即时可见）
+function syncHomeCache() {
+  const version = readHomeCache()?.version
+  writeHomeCache({ categories: categories.value, subcategories: subcategories.value, sites: sites.value, featured: featured.value, version })
+}
+
+// 左侧菜单拖拽排序：一级挂根 ul（读 DOM 顺序重排全量），二级各挂各的 inline ul（天然不出父级）
+// persist 与实例状态声明前置，供下方函数使用
+const { persistMoved: persistSiteMoved } = useDragOrder({
+  save: async (id, sort_order) => {
+    await siteApi.update(id, { sort_order })
+    syncHomeCache()
+  },
+  reload: () => loadData({ silent: true, force: true }),
+})
+const { persistMoved: persistCatMoved } = useDragOrder({
+  save: (id, sort_order) => categoryApi.update(id, { sort_order }),
+  reload: () => loadData({ silent: true, force: true }),
+})
+const { persistMoved: persistSubMoved } = useDragOrder({
+  save: (id, sort_order) => subcategoryApi.update(id, { sort_order }),
+  reload: () => loadData({ silent: true, force: true }),
+})
+const menuSortables = []
+
+// --- 网格拖拽排序（SortableJS）：网格内自由拖拽，按落点前后邻居生成 fractional 键 ---
+// 容器级实例；onEnd 重排主数组并持久化（只 update 被移动的一条）
+//
+// 已知取舍（2026-09-12）：全站共用一套 sort_order。智能推荐是 is_featured 的虚拟聚合视图，
+// 没有独立顺序——推荐区拖拽改键会连带改变该站在其原子分类 tab 中的相对位置，反之亦然。
+// 若未来要“推荐区顺序”与“分类内顺序”相互独立，需加第二套键（如 featured_order 列 +
+// 推荐区按它排序+拖拽只写它），并给现有推荐回填初始键。当前保持单键耦合，改一处、处处一致。
+const gridSortables = []
+function destroyGridSortables() {
+  for (const s of gridSortables.splice(0)) s.destroy()
+}
+function gridListOf(catId) {
+  if (catId === 'featured') return featuredList.value
+  const m = sitesByCat.value
+  return m.get(catId) ?? m.get(Number(catId)) ?? []
+}
+function gridDragDisabled(cid) {
+  // “最新”视角按创建时间排序，拖拽无意义，直接禁用该网格
+  return !editMode.value || (cid === 'featured' && recMode.value === 'new')
+}
+function refreshSortableDisabled() {
+  for (const s of gridSortables) {
+    const cid = s.el.dataset.grid === 'featured' ? 'featured' : s.el.dataset.catId
+    s.option('disabled', gridDragDisabled(cid))
+  }
+  // 左侧菜单：仅编辑模式可拖
+  for (const s of menuSortables) s.option('disabled', !editMode.value)
+}
+function onGridEnd(catId, evt) {
+  const { oldIndex, newIndex } = evt
+  if (oldIndex == null || newIndex == null || oldIndex === newIndex) return
+  // 主数组尚未动：getter 仍是拖拽前顺序
+  const before = [...gridListOf(catId)]
+  const [moved] = before.splice(oldIndex, 1)
+  if (!moved) return
+  before.splice(newIndex, 0, moved)
+  // 合并回主数组（非本网格条目保持原位）
+  const inGrid = new Set(before.map(s => String(s.id)))
+  const queue = [...before]
+  sites.value.splice(0, sites.value.length, ...sites.value.map(s => (inGrid.has(String(s.id)) ? queue.shift() : s)))
+  void persistSiteMoved(before, moved.id)
+}
+function initGridSortables() {
+  destroyGridSortables()
+  for (const el of document.querySelectorAll('.page-home .card-grid')) {
+    const cid = el.dataset.grid === 'featured' ? 'featured' : el.dataset.catId
+    gridSortables.push(Sortable.create(el, {
+      animation: 150,
+      draggable: '.site-card',
+      ghostClass: 'sort-ghost',
+      chosenClass: 'is-dragging',
+      disabled: true,
+      onEnd: evt => onGridEnd(cid, evt),
+    }))
+  }
+}
+watch(editMode, refreshSortableDisabled)
+watch(recMode, refreshSortableDisabled)
+
+function destroyMenuSortables() {
+  for (const s of menuSortables.splice(0)) s.destroy()
+}
+function onMenuCatEnd(evt) {
+  // 根 ul 里还有固定的推荐菜单：按 data-cat-id 读一级顺序，不受其下标干扰
+  const movedId = String(evt.item?.dataset?.catId || '')
+  if (!movedId) return
+  const ids = [...evt.from.querySelectorAll(':scope > .el-sub-menu[data-cat-id]')].map(li => String(li.dataset.catId))
+  const byId = new Map(categories.value.map(c => [String(c.id), c]))
+  const ordered = ids.map(id => byId.get(id)).filter(Boolean)
+  categories.value.splice(0, categories.value.length, ...ordered)
+  void persistCatMoved(categories.value, movedId)
+}
+function onMenuSubEnd(catId, evt) {
+  const { oldIndex, newIndex } = evt
+  if (oldIndex == null || newIndex == null || oldIndex === newIndex) return
+  const list = subcategories.value.filter(s => String(s.category_id) === String(catId))
+  const [moved] = list.splice(oldIndex, 1)
+  if (!moved) return
+  list.splice(newIndex, 0, moved)
+  const inCat = new Set(list.map(s => String(s.id)))
+  const queue = [...list]
+  subcategories.value.splice(0, subcategories.value.length, ...subcategories.value.map(s => (inCat.has(String(s.id)) ? queue.shift() : s)))
+  void persistSubMoved(subcategories.value, moved.id)
+}
+function initMenuSortables() {
+  destroyMenuSortables()
+  const root = document.querySelector('.page-home .main-menu')
+  if (!root) return
+  menuSortables.push(Sortable.create(root, {
+    animation: 150,
+    draggable: '.el-sub-menu[data-cat-id]',
+    handle: '.menu-drag',
+    ghostClass: 'menu-ghost',
+    disabled: true,
+    onEnd: onMenuCatEnd,
+  }))
+  for (const li of root.querySelectorAll(':scope > .el-sub-menu[data-cat-id]')) {
+    const ul = li.querySelector(':scope > ul')
+    if (!ul) continue
+    const cid = li.dataset.catId
+    menuSortables.push(Sortable.create(ul, {
+      animation: 150,
+      draggable: '.el-menu-item',
+      handle: '.menu-drag',
+      ghostClass: 'menu-ghost',
+      disabled: true,
+      onEnd: evt => onMenuSubEnd(cid, evt),
+    }))
+  }
+}
+
+// --- 左侧菜单：分类 / 子分类编辑 ---
+const catDialogVisible = ref(false)
+const catSaving = ref(false)
+const catFormRef = ref()
+const catForm = reactive({ id: null, name: '', slug: '', icon: '', description: '' })
+const catRules = {
+  name: [{ required: true, message: '请输入分类名称', trigger: 'blur' }],
+  slug: [{ required: true, message: '请输入标识', trigger: 'blur' }],
+}
+function openCatDialog(cat) {
+  Object.assign(catForm, { id: cat.id, name: cat.name, slug: cat.slug || '', icon: cat.icon || '', description: cat.description || '' })
+  catDialogVisible.value = true
+}
+// 分类 / 子分类弹窗共用保存流程：校验 → 写库 → 同步本地行 → 同步缓存 → 关窗
+async function saveMenuRow({ formRef, saving, form, update, rows, close }) {
+  try {
+    await formRef.value.validate()
+  } catch {
+    return
+  }
+  saving.value = true
+  try {
+    const { id, ...payload } = form
+    await update(id, payload)
+    const i = rows.value.findIndex(r => String(r.id) === String(id))
+    if (i >= 0) rows.value.splice(i, 1, { ...rows.value[i], ...payload })
+    syncHomeCache()
+    close()
+    ElMessage.success('已保存')
+  } catch (e) {
+    ElMessage.error(e.message || '保存失败')
+  } finally {
+    saving.value = false
+  }
+}
+async function saveCat() {
+  await saveMenuRow({
+    formRef: catFormRef,
+    saving: catSaving,
+    form: catForm,
+    update: (id, payload) => categoryApi.update(id, payload),
+    rows: categories,
+    close: () => (catDialogVisible.value = false),
+  })
+}
+const subDialogVisible = ref(false)
+const subSaving = ref(false)
+const subFormRef = ref()
+const subForm = reactive({ id: null, category_id: '', name: '', slug: '' })
+const subRules = {
+  category_id: [{ required: true, message: '请选择所属分类', trigger: 'change' }],
+  name: [{ required: true, message: '请输入子分类名称', trigger: 'blur' }],
+}
+function openSubDialog(sub) {
+  Object.assign(subForm, { id: sub.id, category_id: sub.category_id, name: sub.name, slug: sub.slug || '' })
+  subDialogVisible.value = true
+}
+async function saveSub() {
+  await saveMenuRow({
+    formRef: subFormRef,
+    saving: subSaving,
+    form: subForm,
+    update: (id, payload) => subcategoryApi.update(id, payload),
+    rows: subcategories,
+    close: () => (subDialogVisible.value = false),
+  })
+}
+
+// --- 编辑弹窗 ---
+const editDialogVisible = ref(false)
+const editSaving = ref(false)
+const editFormRef = ref()
+const originalSubId = ref('')
+const editForm = reactive({
+  id: null,
+  category_id: '',
+  subcategory_id: '',
+  name: '',
+  url: '',
+  description: '',
+  keywords: '',
+  favicon_url: '',
+  is_featured: false,
+  is_hot: false,
+  is_new: false,
+  is_active: true,
+})
+const editRules = {
+  name: [{ required: true, message: '请输入网站名称', trigger: 'blur' }],
+  url: [
+    { required: true, message: '请输入网站链接', trigger: 'blur' },
+    {
+      validator: (_r, v, cb) => {
+        if (v && !/^https?:\/\//i.test(v)) cb(new Error('链接需以 http:// 或 https:// 开头'))
+        else cb()
+      },
+      trigger: 'blur',
+    },
+  ],
+}
+const editFaviconCandidates = computed(() =>
+  editForm.url ? getFaviconCandidates({ url: editForm.url }) : [],
+)
+function openEditDialog(site) {
+  const sub = subcategories.value.find(s => String(s.id) === String(site.subcategory_id))
+  Object.assign(editForm, {
+    id: site.id,
+    category_id: sub ? sub.category_id : '',
+    subcategory_id: site.subcategory_id,
+    name: site.name,
+    url: site.url,
+    description: site.description || '',
+    keywords: site.keywords || '',
+    favicon_url: site.favicon_url || '',
+    is_featured: !!site.is_featured,
+    is_hot: !!site.is_hot,
+    is_new: !!site.is_new,
+    is_active: site.is_active !== false,
+  })
+  originalSubId.value = site.subcategory_id
+  editDialogVisible.value = true
+}
+async function saveEdit() {
+  try {
+    await editFormRef.value.validate()
+  } catch {
+    return
+  }
+  if (!editForm.subcategory_id) return ElMessage.warning('请选择所属子分类')
+  editSaving.value = true
+  try {
+    const payload = {
+      name: editForm.name,
+      url: editForm.url,
+      description: editForm.description,
+      keywords: editForm.keywords,
+      favicon_url: editForm.favicon_url,
+      is_featured: editForm.is_featured,
+      is_hot: editForm.is_hot,
+      is_new: editForm.is_new,
+      is_active: editForm.is_active,
+    }
+    const subChanged = editForm.subcategory_id !== originalSubId.value
+    if (subChanged) {
+      // 换组：排到新组末尾
+      payload.subcategory_id = editForm.subcategory_id
+      payload.sort_order = await siteApi.endKeyForSub(editForm.subcategory_id)
+    }
+    await siteApi.update(editForm.id, payload)
+    editDialogVisible.value = false
+    ElMessage.success('已保存')
+    if (subChanged) {
+      // 跨组移动涉及分组展示，整体静默重拉最稳
+      await loadData({ silent: true, force: true })
+      return
+    }
+    const updated = { ...sites.value.find(s => s.id === editForm.id), ...payload }
+    const idx = sites.value.findIndex(s => s.id === editForm.id)
+    if (idx >= 0) sites.value.splice(idx, 1, updated)
+    const fIdx = featured.value.findIndex(s => s.id === editForm.id)
+    if (payload.is_featured && fIdx < 0) featured.value.push(updated)
+    else if (!payload.is_featured && fIdx >= 0) featured.value.splice(fIdx, 1)
+    else if (fIdx >= 0) featured.value.splice(fIdx, 1, updated)
+    syncHomeCache()
+  } catch (e) {
+    ElMessage.error(e.message || '保存失败')
+  } finally {
+    editSaving.value = false
+  }
+}
+
+const editDeleting = ref(false)
+async function handleEditDelete() {
+  const target = sites.value.find(s => s.id === editForm.id)
+  try {
+    await ElMessageBox.confirm(`确定删除「${target?.name || editForm.name || ''}」吗？删除后不可恢复。`, '删除确认', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+  editDeleting.value = true
+  try {
+    await siteApi.remove(editForm.id)
+    const i = sites.value.findIndex(s => s.id === editForm.id)
+    if (i >= 0) sites.value.splice(i, 1)
+    const f = featured.value.findIndex(s => s.id === editForm.id)
+    if (f >= 0) featured.value.splice(f, 1)
+    syncHomeCache()
+    editDialogVisible.value = false
+    ElMessage.success('已删除')
+  } catch (e) {
+    ElMessage.error(e.message || '删除失败')
+  } finally {
+    editDeleting.value = false
   }
 }
 
@@ -326,6 +692,8 @@ onMounted(async () => {
   await loadData()
 })
 onBeforeUnmount(() => {
+  destroyGridSortables()
+  destroyMenuSortables()
   revealIo?.disconnect()
   activeIo?.disconnect()
   if (onScroll) window.removeEventListener('scroll', onScroll)
@@ -338,6 +706,19 @@ onBeforeUnmount(() => {
 <template>
   <div class="page-container page-home">
     <div class="page-home-top">
+      <el-button
+        v-if="auth.isLoggedIn && !loading"
+        class="edit-toggle"
+        :type="editMode ? 'primary' : 'default'"
+        round
+        @click="editMode = !editMode"
+      >
+        <el-icon class="edit-toggle-icon">
+          <EditPen v-if="!editMode" />
+          <Check v-else />
+        </el-icon>
+        {{ editMode ? '完成编辑' : '编辑模式' }}
+      </el-button>
       <div class="layout-search">
         <div v-if="!loading" class="hero-intro">
           <h1 class="hero-title">
@@ -369,6 +750,12 @@ onBeforeUnmount(() => {
 
     <template v-else>
       <div class="wrapper page-home-content">
+        <transition name="el-fade-in-linear">
+          <div v-if="editMode" class="edit-banner">
+            <el-icon><InfoFilled /></el-icon>
+            <span>编辑模式：拖拽调整顺序，点击卡片或菜单进行编辑</span>
+          </div>
+        </transition>
         <div class="page-main">
           <aside class="aside" :class="{ 'menu-open': sideOpen }">
             <div class="aside-sticky">
@@ -392,16 +779,18 @@ onBeforeUnmount(() => {
                     最新
                   </el-menu-item>
                 </el-sub-menu>
-                <el-sub-menu v-for="cat in categories" :key="cat.id" :index="String(cat.id)" :class="{ 'is-nav-active': String(activeCat) === String(cat.id) }">
+                <el-sub-menu v-for="cat in categories" :key="cat.id" :index="String(cat.id)" :data-cat-id="cat.id" :class="{ 'is-nav-active': String(activeCat) === String(cat.id) }">
                   <template #title>
-                    <div class="sub-title-hit" @click.stop="toggleCatId(cat.id)">
+                    <div class="sub-title-hit" @click.stop="editMode ? openCatDialog(cat) : toggleCatId(cat.id)">
+                      <span v-if="editMode" class="menu-drag" title="拖拽排序">⠿</span>
                       <span class="sub-icon-box"><el-icon><component :is="cat.icon || 'Folder'" /></el-icon></span>
-                      <span>{{ cat.name }}</span>
+                      <span class="sub-name">{{ cat.name }}</span>
                       <span class="sub-count">{{ subsOf(cat.id).length }}</span>
                     </div>
                   </template>
                   <el-menu-item v-for="sub in subsOf(cat.id)" :key="sub.id" :index="`${cat.id}::${sub.id}`" :class="{ 'is-active': String(activeSub[cat.id] ?? activeSub[String(cat.id)]) === String(sub.id) }">
-                    <span class="sub-dot" />{{ sub.name }}
+                    {{ sub.name }}
+                    <span v-if="editMode" class="menu-drag" title="拖拽排序">⠿</span>
                   </el-menu-item>
                 </el-sub-menu>
               </el-menu>
@@ -434,8 +823,20 @@ onBeforeUnmount(() => {
                   </el-check-tag>
                 </div>
                 <div class="section-content">
-                  <div v-if="featuredList.length" class="card-grid">
-                    <SiteCard v-for="(site, idx) in featuredList" :key="site.id" :site="site" :style="{ '--i': idx }" />
+                  <div
+                    v-if="featuredList.length"
+                    class="card-grid"
+                    :class="{ 'is-edit': editMode }"
+                    data-grid="featured"
+                  >
+                    <SiteCard
+                      v-for="(site, idx) in featuredList"
+                      :key="site.id"
+                      :site="site"
+                      :edit-mode="editMode"
+                      :style="{ '--i': idx }"
+                      @edit="openEditDialog(site)"
+                    />
                   </div>
                   <el-empty v-else :image-size="60" description="暂无推荐内容" />
                 </div>
@@ -460,8 +861,21 @@ onBeforeUnmount(() => {
                   </el-check-tag>
                 </div>
                 <div class="section-content">
-                  <div v-if="sitesOf(cat.id).length" class="card-grid">
-                    <SiteCard v-for="(site, idx) in sitesOf(cat.id)" :key="site.id" :site="site" :style="{ '--i': idx }" />
+                  <div
+                    v-if="sitesOf(cat.id).length"
+                    class="card-grid"
+                    :class="{ 'is-edit': editMode }"
+                    data-grid="cat"
+                    :data-cat-id="cat.id"
+                  >
+                    <SiteCard
+                      v-for="(site, idx) in sitesOf(cat.id)"
+                      :key="site.id"
+                      :site="site"
+                      :edit-mode="editMode"
+                      :style="{ '--i': idx }"
+                      @edit="openEditDialog(site)"
+                    />
                   </div>
                   <el-empty v-else :image-size="60" description="该分类暂无网址" />
                 </div>
@@ -471,6 +885,114 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </template>
+
+    <el-dialog v-model="editDialogVisible" title="编辑网址" width="520px" destroy-on-close>
+      <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="90px">
+        <el-form-item label="所属分类">
+          <el-select v-model="editForm.category_id" placeholder="选择主分类" style="width: 100%" @change="editForm.subcategory_id = ''">
+            <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="所属子分类">
+          <el-select v-model="editForm.subcategory_id" placeholder="选择子分类" style="width: 100%">
+            <el-option v-for="s in subsOf(editForm.category_id)" :key="s.id" :label="s.name" :value="s.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="网站名称" prop="name">
+          <el-input v-model="editForm.name" placeholder="网站名称" />
+        </el-form-item>
+        <el-form-item label="网站链接" prop="url">
+          <el-input v-model="editForm.url" placeholder="https://..." />
+        </el-form-item>
+        <el-form-item label="简介">
+          <el-input v-model="editForm.description" type="textarea" :rows="2" placeholder="一句话介绍该网站" />
+        </el-form-item>
+        <el-form-item label="关键词">
+          <el-input v-model="editForm.keywords" type="textarea" :rows="2" placeholder="多个关键词用逗号分隔" />
+        </el-form-item>
+        <el-form-item label="图标地址">
+          <FaviconField v-model="editForm.favicon_url" :candidates="editFaviconCandidates" />
+        </el-form-item>
+        <el-form-item label="标记">
+          <el-checkbox v-model="editForm.is_featured">
+            首页推荐
+          </el-checkbox>
+          <el-checkbox v-model="editForm.is_hot">
+            热门
+          </el-checkbox>
+          <el-checkbox v-model="editForm.is_new">
+            最新
+          </el-checkbox>
+          <el-checkbox v-model="editForm.is_active">
+            启用
+          </el-checkbox>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <el-button type="danger" plain :loading="editDeleting" @click="handleEditDelete">
+            删除
+          </el-button>
+          <div>
+            <el-button @click="editDialogVisible = false">
+              取消
+            </el-button>
+            <el-button type="primary" :loading="editSaving" @click="saveEdit">
+              保存
+            </el-button>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="catDialogVisible" title="编辑分类" width="480px" destroy-on-close>
+      <el-form ref="catFormRef" :model="catForm" :rules="catRules" label-width="90px">
+        <el-form-item label="分类名称" prop="name">
+          <el-input v-model="catForm.name" placeholder="例如：生活服务" />
+        </el-form-item>
+        <el-form-item label="标识 slug" prop="slug">
+          <el-input v-model="catForm.slug" placeholder="例如：life" />
+        </el-form-item>
+        <el-form-item label="分类图标">
+          <el-input v-model="catForm.icon" placeholder="图标文本（可选）" />
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="catForm.description" type="textarea" :rows="2" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="catDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="catSaving" @click="saveCat">
+          保存
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="subDialogVisible" title="编辑子分类" width="480px" destroy-on-close>
+      <el-form ref="subFormRef" :model="subForm" :rules="subRules" label-width="100px">
+        <el-form-item label="所属分类" prop="category_id">
+          <el-select v-model="subForm.category_id" placeholder="选择主分类" style="width: 100%">
+            <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="子分类名称" prop="name">
+          <el-input v-model="subForm.name" placeholder="例如：即时资讯" />
+        </el-form-item>
+        <el-form-item label="标识 slug">
+          <el-input v-model="subForm.slug" placeholder="例如：news" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="subDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="subSaving" @click="saveSub">
+          保存
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 

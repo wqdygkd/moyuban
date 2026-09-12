@@ -1,7 +1,8 @@
 <script setup>
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { BASE_62_DIGITS, generateKeyBetween } from 'fractional-indexing'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { useDragOrder, useTableSortable } from '@/composables/use-drag-order'
 import { usePagination, useSelection } from '@/composables/use-pagination'
 import { categoryApi, siteApi, subcategoryApi } from '@/services/api'
 
@@ -12,11 +13,18 @@ const subcategories = ref([])
 const sites = ref([])
 const { page, pageSize, paged } = usePagination(subcategories)
 const { selected, onSelectionChange } = useSelection()
+const { persistMoved, savingOrder } = useDragOrder({
+  save: (id, sort_order) => subcategoryApi.update(id, { sort_order }),
+  reload: loadData,
+})
+// 表格行拖拽（页内下标 + 分页偏移换算到全量位置）
+const { wrap: tableWrap, init: initRowSortable } = useTableSortable({
+  rows: subcategories,
+  page,
+  pageSize,
+  persist: persistMoved,
+})
 const dialogVisible = ref(false)
-const dragIndex = ref(-1)
-const dragId = ref(null)
-const overId = ref(null)
-const savingOrder = ref(false)
 const formRef = ref()
 const defaultForm = () => ({ id: null, category_id: '', name: '', slug: '', sort_order: '' })
 const form = reactive(defaultForm())
@@ -43,61 +51,6 @@ async function loadData() {
     ElMessage.error(e.message || '加载失败')
   } finally {
     loading.value = false
-  }
-}
-// fractional indexing：拖拽落定后只 update 被移动的一条（前后邻居键之间生成新键）
-function rowClassName({ row }) {
-  return row.id === overId.value ? 'drag-over' : ''
-}
-function onDragStart(row, i) {
-  dragIndex.value = i
-  dragId.value = row.id
-}
-function onDragEnter(row, i) {
-  overId.value = row.id
-  if (i === dragIndex.value || dragIndex.value < 0) return
-  const base = (page.value - 1) * pageSize.value
-  const from = base + dragIndex.value
-  const to = base + i
-  const list = subcategories.value
-  const [moved] = list.splice(from, 1)
-  list.splice(to, 0, moved)
-  dragIndex.value = i
-}
-async function persistOrder() {
-  overId.value = null
-  const id = dragId.value
-  dragIndex.value = -1
-  dragId.value = null
-  if (!id) return
-  const list = subcategories.value
-  const newIndex = list.findIndex(s => s.id === id)
-  if (newIndex < 0) return
-  const previous = newIndex > 0 ? list[newIndex - 1].sort_order || undefined : undefined
-  const next = newIndex < list.length - 1 ? list[newIndex + 1].sort_order || undefined : undefined
-  savingOrder.value = true
-  try {
-    let newKey
-    try {
-      newKey = generateKeyBetween(previous, next, BASE_62_DIGITS)
-    } catch {
-      // 邻居键非法：退化为追加到末尾
-      const keys = list.map(s => s.sort_order).filter(Boolean).map(String)
-      let last
-      for (const key of keys) {
-        if (last === undefined || last < key) last = key
-      }
-      newKey = generateKeyBetween(last, undefined, BASE_62_DIGITS)
-    }
-    if (list[newIndex].sort_order === newKey) return
-    await subcategoryApi.update(id, { sort_order: newKey })
-    list[newIndex].sort_order = newKey
-    ElMessage.success('排序已保存')
-  } catch (e) {
-    ElMessage.error(e.message || '排序保存失败')
-    await loadData()
-  } finally {
-    savingOrder.value = false
   }
 }
 function openDialog(row) {
@@ -167,7 +120,9 @@ async function handleBatchDelete() {
     ElMessage.error(e.message || '删除失败')
   }
 }
-onMounted(loadData)
+onMounted(() => {
+  loadData().finally(() => nextTick(initRowSortable))
+})
 </script>
 
 <template>
@@ -186,20 +141,14 @@ onMounted(loadData)
         </el-button>
       </div>
     </div>
-    <div class="table-card">
-      <el-table v-loading="loading || savingOrder" :data="paged" stripe row-key="id" :row-class-name="rowClassName" @selection-change="onSelectionChange">
+    <div ref="tableWrap" class="table-card">
+      <el-table v-loading="loading || savingOrder" :data="paged" stripe row-key="id" @selection-change="onSelectionChange">
         <el-table-column type="selection" width="48" />
         <el-table-column label="" width="44">
-          <template #default="{ row, $index }">
+          <template #default>
             <span
               class="drag-handle"
               title="拖拽排序"
-              draggable="true"
-              @dragstart="onDragStart(row, $index)"
-              @dragenter="onDragEnter(row, $index)"
-              @dragover.prevent
-              @drop="persistOrder"
-              @dragend="persistOrder"
             >⠿</span>
           </template>
         </el-table-column>
@@ -344,7 +293,7 @@ onMounted(loadData)
     color: var(--el-color-primary);
   }
 }
-:deep(.drag-over td) {
-  border-top: 2px solid var(--el-color-primary);
+:deep(.sortable-ghost td) {
+  background: var(--el-color-primary-light-9);
 }
 </style>

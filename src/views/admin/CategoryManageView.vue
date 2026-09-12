@@ -1,8 +1,8 @@
 <script setup>
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { BASE_62_DIGITS, generateKeyBetween } from 'fractional-indexing'
-import { computed, onMounted, reactive, ref } from 'vue'
-import { useDragOrder } from '@/composables/use-drag-order'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { useDragOrder, useTableSortable } from '@/composables/use-drag-order'
 import { usePagination, useSelection } from '@/composables/use-pagination'
 import { categoryApi, subcategoryApi } from '@/services/api'
 
@@ -12,15 +12,21 @@ const categories = ref([])
 const subcategories = ref([])
 const { page, pageSize, paged } = usePagination(categories)
 const { selected, onSelectionChange } = useSelection()
+const { persistMoved, savingOrder } = useDragOrder({
+  save: (id, sort_order) => categoryApi.update(id, { sort_order }),
+  reload: loadData,
+})
+// 表格行拖拽（页内下标 + 分页偏移换算到全量位置）
+const { wrap: tableWrap, init: initRowSortable } = useTableSortable({
+  rows: categories,
+  page,
+  pageSize,
+  persist: persistMoved,
+})
 const dialogVisible = ref(false)
 const formRef = ref()
 const defaultForm = () => ({ id: null, name: '', slug: '', icon: '', description: '', sort_order: '' })
 const form = reactive(defaultForm())
-const { rowClassName, onDragStart, onDragEnter, persistOrder, savingOrder } = useDragOrder({
-  rows: categories,
-  save: (id, sort_order) => categoryApi.update(id, { sort_order }),
-  reload: loadData,
-})
 const rules = {
   name: [{ required: true, message: '请输入分类名称', trigger: 'blur' }],
   slug: [{ required: true, message: '请输入标识', trigger: 'blur' }],
@@ -107,7 +113,9 @@ async function handleBatchDelete() {
     ElMessage.error(e.message || '删除失败')
   }
 }
-onMounted(loadData)
+onMounted(() => {
+  loadData().finally(() => nextTick(initRowSortable))
+})
 </script>
 
 <template>
@@ -126,20 +134,14 @@ onMounted(loadData)
         </el-button>
       </div>
     </div>
-    <div class="table-card">
-      <el-table v-loading="loading || savingOrder" :data="paged" stripe row-key="id" :row-class-name="rowClassName" @selection-change="onSelectionChange">
+    <div ref="tableWrap" class="table-card">
+      <el-table v-loading="loading || savingOrder" :data="paged" stripe row-key="id" @selection-change="onSelectionChange">
         <el-table-column type="selection" width="48" />
         <el-table-column label="" width="44">
-          <template #default="{ row, $index }">
+          <template #default>
             <span
               class="drag-handle"
               title="拖拽排序"
-              draggable="true"
-              @dragstart="onDragStart(row)"
-              @dragenter="onDragEnter(row)"
-              @dragover.prevent
-              @drop="persistOrder"
-              @dragend="persistOrder"
             >⠿</span>
           </template>
         </el-table-column>
@@ -280,7 +282,7 @@ onMounted(loadData)
     color: var(--el-color-primary);
   }
 }
-:deep(.drag-over td) {
-  border-top: 2px solid var(--el-color-primary);
+:deep(.sortable-ghost td) {
+  background: var(--el-color-primary-light-9);
 }
 </style>

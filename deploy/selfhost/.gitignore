@@ -1,0 +1,6 @@
+# 密钥与运行时数据，切勿提交仓库
+.env
+.env.old
+
+# Postgres 数据目录（首次启动 db 容器后生成）
+volumes/db/data/

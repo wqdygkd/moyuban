@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import SiteFooter from '@/components/SiteFooter.vue'
 import SiteHeader from '@/components/SiteHeader.vue'

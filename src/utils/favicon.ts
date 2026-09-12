@@ -1,4 +1,4 @@
-export function getHost(raw) {
+export function getHost(raw: string | null | undefined): string {
   if (!raw) return ''
   try {
     return new URL(raw.trim()).hostname
@@ -7,7 +7,7 @@ export function getHost(raw) {
   }
 }
 
-export function getFaviconSource(url = '') {
+export function getFaviconSource(url = ''): string {
   if (url.endsWith('/favicon.svg')) return '直连 · svg'
   if (url.endsWith('/favicon.png')) return '直连 · png'
   if (url.includes('faviconsnap.com')) return 'FaviconSnap'
@@ -16,13 +16,19 @@ export function getFaviconSource(url = '') {
   return '手动'
 }
 
-const faviconCache = new Map()
-export function getFaviconCandidates({ url, favicon_url } = {}) {
+export interface FaviconTarget {
+  url?: string | null
+  favicon_url?: string | null
+}
+
+const faviconCache = new Map<string, string[]>()
+export function getFaviconCandidates({ url, favicon_url }: FaviconTarget = {}): string[] {
   const key = `${url}::${favicon_url}`
-  if (faviconCache.has(key)) return faviconCache.get(key)
-  const list = []
-  const seen = new Set()
-  const push = (u) => {
+  const hit = faviconCache.get(key)
+  if (hit) return hit
+  const list: string[] = []
+  const seen = new Set<string>()
+  const push = (u: string | null | undefined) => {
     if (!u || seen.has(u)) return
     seen.add(u)
     list.push(u)

@@ -1,4 +1,8 @@
-<script setup>
+<script setup lang="ts">
+import type { FormInstance, FormRules } from 'element-plus'
+import type { SortableEvent } from 'sortablejs'
+import type { AppVersion, Category, CategoryHome, SiteHome, SubcategoryHome } from '@/types'
+import type { HomeCache } from '@/utils/cache'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import Sortable from 'sortablejs'
 import FaviconField from '@/components/FaviconField.vue'
@@ -8,21 +12,23 @@ import { categoryApi, fetchCategories, fetchSites, fetchSubcategories, metaApi, 
 import { useAuthStore } from '@/store/auth'
 import { readHomeCache, writeHomeCache } from '@/utils/cache'
 import { getFaviconCandidates } from '@/utils/favicon'
+import { groupBy } from '@/utils/group'
 
 const auth = useAuthStore()
 const router = useRouter()
 const loading = ref(true)
 const error = ref('')
-const categories = ref([])
-const subcategories = ref([])
-const sites = ref([])
+const categories = ref<CategoryHome[]>([])
+const subcategories = ref<SubcategoryHome[]>([])
+const sites = ref<SiteHome[]>([])
 // 推荐是 is_featured 的派生视图（见 featuredSites），不另存一份状态，
 // 避免拖拽/编辑后两处数据互相过期（曾用 featured ref 手工同步）。
-const recMode = ref('hot')
-const activeSub = reactive({})
-const activeCat = ref(null)
+type RecMode = 'hot' | 'new'
+const recMode = ref<RecMode>('hot')
+const activeSub = reactive<Record<string, string | null>>({})
+const activeCat = ref<string | null>(null)
 const sideOpen = ref(false)
-const menuRef = ref(null)
+const menuRef = ref<{ open?: (index: string) => void }>()
 
 const greeting = computed(() => {
   const h = new Date().getHours()
@@ -33,7 +39,7 @@ const greeting = computed(() => {
   return '晚上好，今天的班辛苦啦'
 })
 
-function applyCache(c) {
+function applyCache(c: HomeCache | undefined): boolean {
   if (!c) return false
   categories.value = c.categories || []
   subcategories.value = c.subcategories || []
@@ -46,22 +52,23 @@ if (_cached) {
   loading.value = false
 }
 
-const engineOptions = [
+type SearchEngine = 'site' | 'baidu' | 'bing' | 'google'
+const engineOptions: Array<{ label: string, value: SearchEngine }> = [
   { label: '本站', value: 'site' },
   { label: '百度', value: 'baidu' },
   { label: '必应', value: 'bing' },
   { label: '谷歌', value: 'google' },
 ]
-const searchEngine = ref('site')
+const searchEngine = ref<SearchEngine>('site')
 const keyword = ref('')
 const searchPlaceholder = computed(
   () => ({ site: '在本站内搜索网址…', baidu: '百度一下，你就知道…', bing: '必应搜索…', google: 'Google 搜索…' })[searchEngine.value],
 )
 
-function doSearch() {
+function doSearch(): void {
   if (!keyword.value?.trim()) return
   const q = encodeURIComponent(keyword.value.trim())
-  const targets = {
+  const targets: Record<SearchEngine, string> = {
     baidu: `https://www.baidu.com/s?wd=${q}`,
     bing: `https://www.bing.com/search?q=${q}`,
     google: `https://www.google.com/search?q=${q}`,
@@ -84,7 +91,7 @@ const leftOpeneds = computed(() => {
   if (leftActive.value.startsWith('feature')) return ['feature']
   return []
 })
-function onMenuSelect(index) {
+function onMenuSelect(index: string): void {
   // 编辑模式下点二级菜单直接进编辑，不做导航筛选
   if (editMode.value && !index.startsWith('feature')) {
     const sep = index.indexOf('::')
@@ -113,31 +120,13 @@ watch(leftOpeneds, (ids) => {
 
 // ---------- 派生数据（Map 索引避免每行 filter；键统一用 String(id)，
 // 调用方不再需要数字/字符串双写、双查） ----------
-const subsByCat = computed(() => {
-  const m = new Map()
-  for (const s of subcategories.value) {
-    const key = String(s.category_id)
-    const a = m.get(key)
-    if (a) a.push(s)
-    else m.set(key, [s])
-  }
-  return m
-})
-const sitesBySub = computed(() => {
-  const m = new Map()
-  for (const s of sites.value) {
-    const key = String(s.subcategory_id)
-    const a = m.get(key)
-    if (a) a.push(s)
-    else m.set(key, [s])
-  }
-  return m
-})
+const subsByCat = computed(() => groupBy(subcategories.value, s => s.category_id))
+const sitesBySub = computed(() => groupBy(sites.value, s => s.subcategory_id))
 const sitesByCat = computed(() => {
-  const m = new Map()
+  const m = new Map<string, SiteHome[]>()
   for (const cat of categories.value) {
     const subs = subsByCat.value.get(String(cat.id)) || []
-    const list = []
+    const list: SiteHome[] = []
     for (const sub of subs) {
       const arr = sitesBySub.value.get(String(sub.id))
       if (arr) list.push(...arr)
@@ -160,18 +149,18 @@ const featuredList = computed(() => {
   const hot = featuredSites.value.filter(s => s.is_hot)
   return hot.length ? hot : featuredSites.value
 })
-function subsOf(id) {
+function subsOf(id: string | number): SubcategoryHome[] {
   return subsByCat.value.get(String(id)) || []
 }
-function sitesOf(id) {
+function sitesOf(id: string | number): SiteHome[] {
   const key = String(id)
   const fid = activeSub[key]
   return fid ? (sitesBySub.value.get(fid) || []) : (sitesByCat.value.get(key) || [])
 }
-function activeSubOf(id) {
+function activeSubOf(id: string | number): string | null {
   return activeSub[String(id)] ?? null
 }
-function initDefaultSubs() {
+function initDefaultSubs(): void {
   for (const cat of categories.value) {
     const key = String(cat.id)
     if (activeSub[key] == null) {
@@ -184,71 +173,72 @@ watch([categories, subcategories], () => {
   if (categories.value.length && subcategories.value.length) initDefaultSubs()
 }, { immediate: true })
 
-let scrollLockTimer = null
+let scrollLockTimer: ReturnType<typeof setTimeout> | null = null
 let scrollLocked = false
-function lockScroll(ms = 700) {
+function lockScroll(ms = 700): void {
   scrollLocked = true
-  clearTimeout(scrollLockTimer)
+  if (scrollLockTimer) clearTimeout(scrollLockTimer)
   scrollLockTimer = setTimeout(() => {
     scrollLocked = false
     updateActive()
   }, ms)
 }
-function scrollTo(el, opts = { behavior: 'smooth', block: 'start' }) {
+function scrollTo(el: Element | null | undefined, opts: ScrollIntoViewOptions = { behavior: 'smooth', block: 'start' }): void {
   if (!el) return
   lockScroll()
   el.scrollIntoView(opts)
 }
-function scrollToId(catId) {
+function scrollToId(catId: string | number): void {
   scrollTo(document.getElementById(`cat-${catId}`))
 }
-function goCategory(catId) {
+function goCategory(catId: string | number): void {
   router.push({ name: 'category', params: { id: catId } })
 }
-function scrollToFeature() {
+function scrollToFeature(): void {
   scrollTo(document.querySelector('.category-anchor[data-scroll="feature"]'))
 }
-function toggleSub(cat, sub) {
+function toggleSub(cat: CategoryHome, sub: SubcategoryHome): void {
   const key = String(cat.id)
   const sid = String(sub.id)
   activeSub[key] = activeSub[key] === sid ? null : sid
   // 右侧点击只切筛选，不碰 leftActive，避免左侧菜单自动展开
 }
-function setRecMode(mode) {
+function setRecMode(mode: RecMode): void {
   recMode.value = mode
   scrollToFeature()
 }
 
 // ---------- 卡片入场（精简：首屏直接 inview，其余 IO） ----------
-let revealIo = null
-async function setupReveal() {
+let revealIo: IntersectionObserver | null = null
+async function setupReveal(): Promise<void> {
   await nextTick()
   revealIo?.disconnect()
-  revealIo = new IntersectionObserver((entries) => {
+  const io = new IntersectionObserver((entries) => {
     for (const e of entries) {
       if (e.isIntersecting) {
         e.target.classList.add('inview')
-        revealIo.unobserve(e.target)
+        io.unobserve(e.target)
       }
     }
   }, { rootMargin: '0px 0px 500px 0px', threshold: 0 })
+  revealIo = io
   for (const el of document.querySelectorAll('.category-section')) {
     if (el.getBoundingClientRect().top < window.innerHeight + 500) el.classList.add('inview')
-    else revealIo.observe(el)
+    else io.observe(el)
   }
 }
 
 // 按表按需拉取：版本一致则跳过
-function isVersionEqual(a, b) {
-  return a && b && a.cat === b.cat && a.sub === b.sub && a.site === b.site
+function isVersionEqual(a: AppVersion | null | undefined, b: AppVersion | null | undefined): boolean {
+  return !!a && !!b && a.cat === b.cat && a.sub === b.sub && a.site === b.site
 }
-async function loadData({ silent = false, force = false } = {}) {
+async function loadData({ silent = false, force = false }: { silent?: boolean, force?: boolean } = {}): Promise<void> {
   const cached = readHomeCache()
   const hasCache = !!cached
   if (!silent && !hasCache) loading.value = true
   if (!silent) error.value = ''
   try {
-    let remote = null
+    let remote: AppVersion | null = null
     try {
       remote = await metaApi.getVersion()
     } catch (e) {
@@ -269,7 +259,7 @@ async function loadData({ silent = false, force = false } = {}) {
     applyCache(next)
     writeHomeCache(next)
   } catch (e) {
-    if (!hasCache) error.value = e.message || '加载失败，请检查 Supabase 配置'
+    if (!hasCache) error.value = e instanceof Error ? e.message : '加载失败，请检查 Supabase 配置'
     else console.warn('[cache] 后台刷新失败', e)
   } finally {
     loading.value = false
@@ -283,7 +273,7 @@ async function loadData({ silent = false, force = false } = {}) {
 
 // 把当前内存数据同步回首页缓存（写库后 DB 触发器会自增 app_meta 版本，
 // 其余端靠版本探测自动刷新；本端直接同步保证即时可见）
-function syncHomeCache() {
+function syncHomeCache(): void {
   const version = readHomeCache()?.version
   writeHomeCache({ categories: categories.value, subcategories: subcategories.value, sites: sites.value, version })
 }
@@ -292,20 +282,20 @@ function syncHomeCache() {
 // persist 与实例状态声明前置，供下方函数使用
 const { persistMoved: persistSiteMoved } = useDragOrder({
   save: async (id, sort_order) => {
-    await siteApi.update(id, { sort_order })
+    await siteApi.update(String(id), { sort_order })
     syncHomeCache()
   },
   reload: () => loadData({ silent: true, force: true }),
 })
 const { persistMoved: persistCatMoved } = useDragOrder({
-  save: (id, sort_order) => categoryApi.update(id, { sort_order }),
+  save: (id, sort_order) => categoryApi.update(String(id), { sort_order }),
   reload: () => loadData({ silent: true, force: true }),
 })
 const { persistMoved: persistSubMoved } = useDragOrder({
-  save: (id, sort_order) => subcategoryApi.update(id, { sort_order }),
+  save: (id, sort_order) => subcategoryApi.update(String(id), { sort_order }),
   reload: () => loadData({ silent: true, force: true }),
 })
-const menuSortables = []
+const menuSortables: Sortable[] = []
 
 // --- 网格拖拽排序（SortableJS）：网格内自由拖拽，按落点前后邻居生成 fractional 键 ---
 // 容器级实例；onEnd 重排主数组并持久化（只 update 被移动的一条）
@@ -314,26 +304,26 @@ const menuSortables = []
 // 没有独立顺序——推荐区拖拽改键会连带改变该站在其原子分类 tab 中的相对位置，反之亦然。
 // 若未来要“推荐区顺序”与“分类内顺序”相互独立，需加第二套键（如 featured_order 列 +
 // 推荐区按它排序+拖拽只写它），并给现有推荐回填初始键。当前保持单键耦合，改一处、处处一致。
-const gridSortables = []
-function destroyGridSortables() {
+const gridSortables: Sortable[] = []
+function destroyGridSortables(): void {
   for (const s of gridSortables.splice(0)) s.destroy()
 }
-function gridListOf(catId) {
+function gridListOf(catId: string): SiteHome[] {
   if (catId === 'featured') return featuredList.value
   return sitesByCat.value.get(String(catId)) ?? []
 }
-function gridDragDisabled(cid) {
+function gridDragDisabled(cid: string | undefined): boolean {
   // “最新”视角按创建时间排序，拖拽无意义，直接禁用该网格
   return !editMode.value || (cid === 'featured' && recMode.value === 'new')
 }
-function refreshSortableDisabled() {
+function refreshSortableDisabled(): void {
   for (const s of gridSortables) {
     const cid = s.el.dataset.grid === 'featured' ? 'featured' : s.el.dataset.catId
     s.option('disabled', gridDragDisabled(cid))
   }
   for (const s of menuSortables) s.option('disabled', !editMode.value)
 }
-function onGridEnd(catId, evt) {
+function onGridEnd(catId: string, evt: SortableEvent): void {
   const { oldIndex, newIndex } = evt
   if (oldIndex == null || newIndex == null || oldIndex === newIndex) return
   // 主数组尚未动：getter 仍是拖拽前顺序
@@ -344,14 +334,14 @@ function onGridEnd(catId, evt) {
   // 合并回主数组（非本网格条目保持原位）
   const inGrid = new Set(before.map(s => String(s.id)))
   const queue = [...before]
-  sites.value.splice(0, sites.value.length, ...sites.value.map(s => (inGrid.has(String(s.id)) ? queue.shift() : s)))
+  sites.value.splice(0, sites.value.length, ...sites.value.map(s => (inGrid.has(String(s.id)) ? queue.shift() ?? s : s)))
   void persistSiteMoved(before, moved.id)
 }
-function initGridSortables() {
+function initGridSortables(): void {
   destroyGridSortables()
   for (const el of document.querySelectorAll('.page-home .card-grid')) {
-    const cid = el.dataset.grid === 'featured' ? 'featured' : el.dataset.catId
-    gridSortables.push(Sortable.create(el, {
+    const cid = (el as HTMLElement).dataset.grid === 'featured' ? 'featured' : (el as HTMLElement).dataset.catId ?? ''
+    gridSortables.push(Sortable.create(el as HTMLElement, {
       animation: 150,
       draggable: '.site-card',
       ghostClass: 'sort-ghost',
@@ -364,20 +354,21 @@ function initGridSortables() {
 watch(editMode, refreshSortableDisabled)
 watch(recMode, refreshSortableDisabled)
 
-function destroyMenuSortables() {
+function destroyMenuSortables(): void {
   for (const s of menuSortables.splice(0)) s.destroy()
 }
-function onMenuCatEnd(evt) {
+function onMenuCatEnd(evt: SortableEvent): void {
   // 根 ul 里还有固定的推荐菜单：按 data-cat-id 读一级顺序，不受其下标干扰
   const movedId = String(evt.item?.dataset?.catId || '')
   if (!movedId) return
-  const ids = [...evt.from.querySelectorAll(':scope > .el-sub-menu[data-cat-id]')].map(li => String(li.dataset.catId))
+  const from = evt.from as HTMLElement
+  const ids = [...from.querySelectorAll(':scope > .el-sub-menu[data-cat-id]')].map(li => String((li as HTMLElement).dataset.catId))
   const byId = new Map(categories.value.map(c => [String(c.id), c]))
-  const ordered = ids.map(id => byId.get(id)).filter(Boolean)
+  const ordered = ids.map(id => byId.get(id)).filter((c): c is CategoryHome => !!c)
   categories.value.splice(0, categories.value.length, ...ordered)
   void persistCatMoved(categories.value, movedId)
 }
-function onMenuSubEnd(catId, evt) {
+function onMenuSubEnd(catId: string | undefined, evt: SortableEvent): void {
   const { oldIndex, newIndex } = evt
   if (oldIndex == null || newIndex == null || oldIndex === newIndex) return
   const list = subcategories.value.filter(s => String(s.category_id) === String(catId))
@@ -386,14 +377,14 @@ function onMenuSubEnd(catId, evt) {
   list.splice(newIndex, 0, moved)
   const inCat = new Set(list.map(s => String(s.id)))
   const queue = [...list]
-  subcategories.value.splice(0, subcategories.value.length, ...subcategories.value.map(s => (inCat.has(String(s.id)) ? queue.shift() : s)))
+  subcategories.value.splice(0, subcategories.value.length, ...subcategories.value.map(s => (inCat.has(String(s.id)) ? queue.shift() ?? s : s)))
   void persistSubMoved(subcategories.value, moved.id)
 }
-function initMenuSortables() {
+function initMenuSortables(): void {
   destroyMenuSortables()
   const root = document.querySelector('.page-home .main-menu')
   if (!root) return
-  menuSortables.push(Sortable.create(root, {
+  menuSortables.push(Sortable.create(root as HTMLElement, {
     animation: 150,
     draggable: '.el-sub-menu[data-cat-id]',
     handle: '.menu-drag',
@@ -404,8 +395,8 @@ function initMenuSortables() {
   for (const li of root.querySelectorAll(':scope > .el-sub-menu[data-cat-id]')) {
     const ul = li.querySelector(':scope > ul')
     if (!ul) continue
-    const cid = li.dataset.catId
-    menuSortables.push(Sortable.create(ul, {
+    const cid = (li as HTMLElement).dataset.catId
+    menuSortables.push(Sortable.create(ul as HTMLElement, {
       animation: 150,
       draggable: '.el-menu-item',
       handle: '.menu-drag',
@@ -418,66 +409,92 @@ function initMenuSortables() {
 
 const catDialogVisible = ref(false)
 const catSaving = ref(false)
-const catFormRef = ref()
-const catForm = reactive({ id: null, name: '', slug: '', icon: '', description: '' })
-const catRules = {
+const catFormRef = ref<FormInstance>()
+
+interface CatFormState {
+  id: string | null
+  name: string
+  slug: string
+  icon: string
+  description: string
+}
+
+const catForm = reactive<CatFormState>({ id: null, name: '', slug: '', icon: '', description: '' })
+const catRules: FormRules<CatFormState> = {
   name: [{ required: true, message: '请输入分类名称', trigger: 'blur' }],
   slug: [{ required: true, message: '请输入标识', trigger: 'blur' }],
 }
-function openCatDialog(cat) {
-  Object.assign(catForm, { id: cat.id, name: cat.name, slug: cat.slug || '', icon: cat.icon || '', description: cat.description || '' })
+function openCatDialog(cat: CategoryHome): void {
+  Object.assign(catForm, { id: cat.id, name: cat.name, slug: cat.slug || '', icon: cat.icon || '', description: (cat as Category).description || '' })
   catDialogVisible.value = true
 }
 // 分类 / 子分类弹窗共用保存流程：校验 → 写库 → 同步本地行 → 同步缓存 → 关窗
-async function saveMenuRow({ formRef, saving, form, update, rows, close }) {
+async function saveMenuRow<TForm extends { id: string | number | null }, TRow extends { id: string | number | null }>(args: {
+  formRef: Ref<FormInstance | undefined>
+  saving: Ref<boolean>
+  form: TForm
+  update: (id: string, payload: Record<string, unknown>) => Promise<unknown>
+  rows: Ref<TRow[]>
+  close: () => void
+}): Promise<void> {
+  const { formRef, saving, form, update, rows, close } = args
   try {
-    await formRef.value.validate()
+    await formRef.value?.validate()
   } catch {
     return
   }
   saving.value = true
   try {
     const { id, ...payload } = form
-    await update(id, payload)
+    if (id == null) return
+    await update(String(id), payload)
     const i = rows.value.findIndex(r => String(r.id) === String(id))
-    if (i >= 0) rows.value.splice(i, 1, { ...rows.value[i], ...payload })
+    if (i >= 0) Object.assign(rows.value[i], payload)
     syncHomeCache()
     close()
     ElMessage.success('已保存')
   } catch (e) {
-    ElMessage.error(e.message || '保存失败')
+    ElMessage.error(e instanceof Error ? e.message : '保存失败')
   } finally {
     saving.value = false
   }
 }
-async function saveCat() {
+async function saveCat(): Promise<void> {
   await saveMenuRow({
     formRef: catFormRef,
     saving: catSaving,
     form: catForm,
-    update: (id, payload) => categoryApi.update(id, payload),
+    update: (id, payload) => categoryApi.update(id, payload as Partial<Category>),
     rows: categories,
     close: () => (catDialogVisible.value = false),
   })
 }
 const subDialogVisible = ref(false)
 const subSaving = ref(false)
-const subFormRef = ref()
-const subForm = reactive({ id: null, category_id: '', name: '', slug: '' })
-const subRules = {
+const subFormRef = ref<FormInstance>()
+
+interface SubFormState {
+  id: string | null
+  category_id: string
+  name: string
+  slug: string
+}
+
+const subForm = reactive<SubFormState>({ id: null, category_id: '', name: '', slug: '' })
+const subRules: FormRules<SubFormState> = {
   category_id: [{ required: true, message: '请选择所属分类', trigger: 'change' }],
   name: [{ required: true, message: '请输入子分类名称', trigger: 'blur' }],
 }
-function openSubDialog(sub) {
+function openSubDialog(sub: SubcategoryHome): void {
   Object.assign(subForm, { id: sub.id, category_id: sub.category_id, name: sub.name, slug: sub.slug || '' })
   subDialogVisible.value = true
 }
-async function saveSub() {
+async function saveSub(): Promise<void> {
   await saveMenuRow({
     formRef: subFormRef,
     saving: subSaving,
     form: subForm,
-    update: (id, payload) => subcategoryApi.update(id, payload),
+    update: (id, payload) => subcategoryApi.update(id, payload as Partial<SubcategoryHome>),
     rows: subcategories,
     close: () => (subDialogVisible.value = false),
   })
@@ -485,9 +502,25 @@ async function saveSub() {
 
 const editDialogVisible = ref(false)
 const editSaving = ref(false)
-const editFormRef = ref()
+const editFormRef = ref<FormInstance>()
 const originalSubId = ref('')
-const editForm = reactive({
+
+interface EditFormState {
+  id: string | null
+  category_id: string
+  subcategory_id: string
+  name: string
+  url: string
+  description: string
+  keywords: string
+  favicon_url: string
+  is_featured: boolean
+  is_hot: boolean
+  is_new: boolean
+  is_active: boolean
+}
+
+const editForm = reactive<EditFormState>({
   id: null,
   category_id: '',
   subcategory_id: '',
@@ -501,7 +534,7 @@ const editForm = reactive({
   is_new: false,
   is_active: true,
 })
-const editRules = {
+const editRules: FormRules<EditFormState> = {
   name: [{ required: true, message: '请输入网站名称', trigger: 'blur' }],
   url: [
     { required: true, message: '请输入网站链接', trigger: 'blur' },
@@ -517,12 +550,12 @@ const editRules = {
 const editFaviconCandidates = computed(() =>
   editForm.url ? getFaviconCandidates({ url: editForm.url }) : [],
 )
-function openEditDialog(site) {
+function openEditDialog(site: SiteHome): void {
   const sub = subcategories.value.find(s => String(s.id) === String(site.subcategory_id))
   Object.assign(editForm, {
     id: site.id,
     category_id: sub ? sub.category_id : '',
-    subcategory_id: site.subcategory_id,
+    subcategory_id: site.subcategory_id ?? '',
     name: site.name,
     url: site.url,
     description: site.description || '',
@@ -533,19 +566,35 @@ function openEditDialog(site) {
     is_new: !!site.is_new,
     is_active: site.is_active !== false,
   })
-  originalSubId.value = site.subcategory_id
+  originalSubId.value = site.subcategory_id ?? ''
   editDialogVisible.value = true
 }
-async function saveEdit() {
+async function saveEdit(): Promise<void> {
   try {
-    await editFormRef.value.validate()
+    await editFormRef.value?.validate()
   } catch {
     return
   }
-  if (!editForm.subcategory_id) return ElMessage.warning('请选择所属子分类')
+  if (!editForm.subcategory_id) {
+    ElMessage.warning('请选择所属子分类')
+    return
+  }
+  if (!editForm.id) return
   editSaving.value = true
   try {
-    const payload = {
+    const payload: {
+      name: string
+      url: string
+      description: string
+      keywords: string
+      favicon_url: string
+      is_featured: boolean
+      is_hot: boolean
+      is_new: boolean
+      is_active: boolean
+      subcategory_id?: string
+      sort_order?: string
+    } = {
       name: editForm.name,
       url: editForm.url,
       description: editForm.description,
@@ -570,19 +619,20 @@ async function saveEdit() {
       await loadData({ silent: true, force: true })
       return
     }
-    const updated = { ...sites.value.find(s => s.id === editForm.id), ...payload }
+    const current = sites.value.find(s => s.id === editForm.id)
     const idx = sites.value.findIndex(s => s.id === editForm.id)
-    if (idx >= 0) sites.value.splice(idx, 1, updated)
+    if (idx >= 0 && current) sites.value.splice(idx, 1, { ...current, ...payload })
     syncHomeCache()
   } catch (e) {
-    ElMessage.error(e.message || '保存失败')
+    ElMessage.error(e instanceof Error ? e.message : '保存失败')
   } finally {
     editSaving.value = false
   }
 }
 
 const editDeleting = ref(false)
-async function handleEditDelete() {
+async function handleEditDelete(): Promise<void> {
+  if (!editForm.id) return
   const target = sites.value.find(s => s.id === editForm.id)
   try {
     await ElMessageBox.confirm(`确定删除「${target?.name || editForm.name || ''}」吗？删除后不可恢复。`, '删除确认', {
@@ -602,25 +652,25 @@ async function handleEditDelete() {
     editDialogVisible.value = false
     ElMessage.success('已删除')
   } catch (e) {
-    ElMessage.error(e.message || '删除失败')
+    ElMessage.error(e instanceof Error ? e.message : '删除失败')
   } finally {
     editDeleting.value = false
   }
 }
 
 // ---------- 滚动高亮：scroll 扫描替代 IO（修复大区块误判） ----------
-let activeIo = null
-let activeRaf = null
-let onScroll = null
+let activeIo: IntersectionObserver | null = null
+let activeRaf: number | null = null
+let onScroll: (() => void) | null = null
 // 滚动吸附偏移：与 scroll-margin-top 保持一致，
 // --ui-header-height(64) + --space-4(16) + 8 容差
 const HEADER_OFFSET_PX = 88
-function updateActive() {
+function updateActive(): void {
   if (scrollLocked) return
   const anchors = document.querySelectorAll('.category-anchor')
   if (!anchors.length) return
   const offset = HEADER_OFFSET_PX
-  let best = null
+  let best: Element | null = null
   let bestTop = -Infinity
   for (const el of anchors) {
     const top = el.getBoundingClientRect().top
@@ -634,24 +684,25 @@ function updateActive() {
   // 顶部未越过 offset 时保持首个（feature）
   if (!best) best = anchors[0]
   if (!best) return
-  if (best.dataset.scroll === 'feature') {
+  if ((best as HTMLElement).dataset.scroll === 'feature') {
     activeCat.value = null
   } else {
     const sec = best.querySelector('[id^="cat-"]')
-    const raw = best.id?.startsWith('cat-') ? best.id.slice(4) : sec?.id?.slice(4) ?? null
+    const bestId = (best as HTMLElement).id
+    const raw = bestId?.startsWith('cat-') ? bestId.slice(4) : sec?.id?.slice(4) ?? null
     activeCat.value = raw ? String(raw) : null
   }
 }
-function setupActiveObserver() {
+function setupActiveObserver(): void {
   activeIo?.disconnect()
   if (onScroll) window.removeEventListener('scroll', onScroll)
-  if (activeRaf) cancelAnimationFrame(activeRaf)
+  if (activeRaf != null) cancelAnimationFrame(activeRaf)
   const anchors = document.querySelectorAll('.category-anchor')
   if (!anchors.length) return
   // rAF 节流的 scroll 扫描：对大区块也精准在 header 线切换
   onScroll = () => {
     if (scrollLocked) return
-    if (activeRaf) return
+    if (activeRaf != null) return
     activeRaf = requestAnimationFrame(() => {
       activeRaf = null
       updateActive()
@@ -680,10 +731,12 @@ onBeforeUnmount(() => {
   destroyMenuSortables()
   revealIo?.disconnect()
   activeIo?.disconnect()
-  if (onScroll) window.removeEventListener('scroll', onScroll)
-  window.removeEventListener('resize', onScroll)
-  if (activeRaf) cancelAnimationFrame(activeRaf)
-  clearTimeout(scrollLockTimer)
+  if (onScroll) {
+    window.removeEventListener('scroll', onScroll)
+    window.removeEventListener('resize', onScroll)
+  }
+  if (activeRaf != null) cancelAnimationFrame(activeRaf)
+  if (scrollLockTimer) clearTimeout(scrollLockTimer)
 })
 </script>
 
@@ -835,7 +888,7 @@ onBeforeUnmount(() => {
                     </h2>
                   </div>
                   <el-button link type="primary" class="section-more" @click="goCategory(cat.id)">
-                    进入分类<el-icon><ArrowRight /></el-icon>
+                    <el-icon><ArrowRight /></el-icon>
                   </el-button>
                 </div>
                 <div class="child-tabs">

@@ -1,75 +1,85 @@
-<script setup>
+<script setup lang="ts">
+import type { UploadFile } from 'element-plus'
+import type { DumpSummary, NavDump } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { assertSupabase, clearTables } from '@/lib/supabase'
+import { clearTables } from '@/lib/supabase'
 import { categoryApi } from '@/services/api'
 import { exportDump, importDump, summarizeDump } from '@/services/import-api'
 
-const sourceMode = ref('file')
-const fileData = ref(null)
+type SourceMode = 'file' | 'url'
+interface LogEntry { type: 'info' | 'success' | 'error', msg: string }
+interface TreeNode { key: number, name: string, subs: string[] }
+
+const sourceMode = ref<SourceMode>('file')
+const fileData = ref<NavDump | null>(null)
 const urlInput = ref('')
 const parsing = ref(false)
 const importing = ref(false)
 const exporting = ref(false)
 const clearing = ref(false)
 const clearFirst = ref(false)
-const summary = ref({ categoryCount: 0, subcategoryCount: 0, siteCount: 0 })
-const logs = ref([])
+const summary = ref<DumpSummary>({ categoryCount: 0, subcategoryCount: 0, siteCount: 0 })
+const logs = ref<LogEntry[]>([])
 const treeVisible = ref(false)
-const treeData = ref([])
+const treeData = ref<TreeNode[]>([])
 
-function onFileChange(uploadFile) {
+function onFileChange(uploadFile: UploadFile): void {
+  if (!uploadFile.raw) return
   const reader = new FileReader()
   reader.onload = (e) => {
     try {
-      const json = JSON.parse(e.target.result)
+      const json = JSON.parse(e.target?.result as string) as NavDump
       fileData.value = json
       summary.value = summarizeDump(json)
       buildTree(json)
       ElMessage.success(`已解析文件：分类 ${summary.value.categoryCount}，网址 ${summary.value.siteCount}`)
     } catch (err) {
-      ElMessage.error(`JSON 解析失败：${err.message}`)
+      ElMessage.error(`JSON 解析失败：${err instanceof Error ? err.message : String(err)}`)
     }
   }
   reader.readAsText(uploadFile.raw)
 }
 
-async function parseByUrl() {
+async function parseByUrl(): Promise<void> {
   const v = urlInput.value.trim()
-  if (!v) return ElMessage.warning('请粘贴 JSON 内容或 URL')
+  if (!v) {
+    ElMessage.warning('请粘贴 JSON 内容或 URL')
+    return
+  }
   parsing.value = true
   try {
-    let json
+    let json: NavDump
     if (/^https?:\/\//i.test(v)) {
       const res = await fetch(v)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      json = await res.json()
+      json = await res.json() as NavDump
     } else {
-      json = JSON.parse(v)
+      json = JSON.parse(v) as NavDump
     }
     fileData.value = json
     summary.value = summarizeDump(json)
     buildTree(json)
     ElMessage.success(`解析成功：分类 ${summary.value.categoryCount}，网址 ${summary.value.siteCount}`)
   } catch (err) {
-    ElMessage.error(`解析失败：${err.message}`)
+    ElMessage.error(`解析失败：${err instanceof Error ? err.message : String(err)}`)
   } finally {
     parsing.value = false
   }
 }
 
-function buildTree(json) {
-  const cats = json?.categoryTree?.categories || []
+function buildTree(json: NavDump): void {
+  const cats = json?.categoryTree?.categories ?? []
   treeData.value = cats.map((c, i) => ({
     key: i,
     name: c.name,
-    subs: (c.children || []).map(s => s.name),
+    subs: (c.children ?? []).map(s => s.name),
   }))
 }
-function previewTree() {
+function previewTree(): void {
   treeVisible.value = true
 }
 
-function reset() {
+function reset(): void {
   fileData.value = null
   urlInput.value = ''
   clearFirst.value = false
@@ -77,7 +87,9 @@ function reset() {
   summary.value = { categoryCount: 0, subcategoryCount: 0, siteCount: 0 }
 }
 
-async function confirmImport() {
+async function confirmImport(): Promise<void> {
+  const dump = fileData.value
+  if (!dump) return
   await ElMessageBox.confirm(
     `确定导入 ${summary.value.categoryCount} 个分类、${summary.value.subcategoryCount} 个子分类、${summary.value.siteCount} 个网址吗？`,
     '确认导入',
@@ -86,10 +98,10 @@ async function confirmImport() {
   importing.value = true
   logs.value = []
   try {
-    const result = await importDump(fileData.value, {
+    const result = await importDump(dump, {
       clearFirst: clearFirst.value,
-      onProgress: (stage, cur, total, msg) => {
-        logs.value.push({ type: 'info', msg })
+      onProgress: ({ message }) => {
+        logs.value.push({ type: 'info', msg: message })
       },
     })
     logs.value.push({
@@ -98,14 +110,14 @@ async function confirmImport() {
     })
     ElMessage.success('导入完成')
   } catch (e) {
-    logs.value.push({ type: 'error', msg: `导入失败：${e.message}` })
-    ElMessage.error(`导入失败：${e.message}`)
+    logs.value.push({ type: 'error', msg: `导入失败：${e instanceof Error ? e.message : String(e)}` })
+    ElMessage.error(`导入失败：${e instanceof Error ? e.message : String(e)}`)
   } finally {
     importing.value = false
   }
 }
 
-async function handleExport() {
+async function handleExport(): Promise<void> {
   exporting.value = true
   try {
     const categories = await categoryApi.list()
@@ -119,14 +131,13 @@ async function handleExport() {
     URL.revokeObjectURL(url)
     ElMessage.success(`已导出 ${categories.length} 个分类`)
   } catch (e) {
-    ElMessage.error(`导出失败：${e.message}`)
+    ElMessage.error(`导出失败：${e instanceof Error ? e.message : String(e)}`)
   } finally {
     exporting.value = false
   }
 }
 
-async function handleClearAll() {
-  assertSupabase()
+async function handleClearAll(): Promise<void> {
   await ElMessageBox.confirm('确定清空数据库中的所有网址、子分类和分类吗？此操作不可恢复！', '数据清理', {
     confirmButtonText: '全部清空',
     cancelButtonText: '取消',
@@ -137,7 +148,7 @@ async function handleClearAll() {
     await clearTables(['sites', 'subcategories', 'categories'])
     ElMessage.success('已清空全部数据')
   } catch (e) {
-    ElMessage.error(`清理失败：${e.message}`)
+    ElMessage.error(`清理失败：${e instanceof Error ? e.message : String(e)}`)
   } finally {
     clearing.value = false
   }
@@ -219,7 +230,9 @@ async function handleClearAll() {
         <el-alert type="warning" :closable="false" class="warn">
           <template #title>
             导入将产生以下数据。若要
-            <a href="javascript:void(0)" style="color: inherit; text-decoration: underline" @click="previewTree">查看分类树</a>
+            <el-button link type="primary" style="padding: 0; vertical-align: baseline" @click="previewTree">
+              查看分类树
+            </el-button>
             ，请确认无误。
           </template>
         </el-alert>

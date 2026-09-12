@@ -1,4 +1,6 @@
-export function usePagination(source, defaultSize = 10) {
+import type { Ref } from 'vue'
+
+export function usePagination<T>(source: Ref<T[]>, defaultSize = 10) {
   const page = ref(1)
   const pageSize = ref(defaultSize)
   const paged = computed(() => {
@@ -14,9 +16,9 @@ export function usePagination(source, defaultSize = 10) {
   return { page, pageSize, paged }
 }
 
-export function useSelection() {
-  const selected = ref([])
-  function onSelectionChange(rows) {
+export function useSelection<T>() {
+  const selected = ref<T[]>([])
+  function onSelectionChange(rows: T[]): void {
     selected.value = rows
   }
   return { selected, onSelectionChange }

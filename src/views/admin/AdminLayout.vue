@@ -1,4 +1,5 @@
-<script setup>
+<script setup lang="ts">
+import type { ThemeName } from '@/types'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/store/auth'
 import { useTheme } from '@/utils/theme'
@@ -7,27 +8,27 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const theme = useTheme()
-const THEME_LABEL = { douyin: '抖音', xhs: '小红书', kuaishou: '快手', shipinhao: '视频号' }
+const THEME_LABEL: Record<ThemeName, string> = { douyin: '抖音', xhs: '小红书', kuaishou: '快手', shipinhao: '视频号' }
 const currentTheme = computed(() => theme.current.value)
-function onThemeCommand(t) {
+function onThemeCommand(t: ThemeName): void {
   theme.set(t)
 }
 
 const pageTitle = computed(() => {
-  const map = {
+  const map: Record<string, string> = {
     'admin-sites': '网址管理',
     'admin-categories': '分类管理',
     'admin-subcategories': '子分类管理',
     'admin-import': '数据导入',
   }
-  return map[route.name] || '管理后台'
+  return map[String(route.name)] || '管理后台'
 })
 
-function goHome() {
+function goHome(): void {
   router.push('/')
 }
 
-async function handleLogout() {
+async function handleLogout(): Promise<void> {
   await auth.logout()
   ElMessage.success('已退出登录')
   router.push('/')

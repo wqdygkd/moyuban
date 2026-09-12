@@ -1,6 +1,7 @@
-<script setup>
+<script setup lang="ts">
+import type { FormInstance, FormRules } from 'element-plus'
+import type { Category, Site, Subcategory, SubcategoryWithCategory } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useDragOrder, useTableSortable } from '@/composables/use-drag-order'
 import { usePagination, useSelection } from '@/composables/use-pagination'
 import { categoryApi, siteApi, subcategoryApi } from '@/services/api'
@@ -8,13 +9,13 @@ import { appendOrderKey } from '@/utils/order'
 
 const loading = ref(false)
 const saving = ref(false)
-const categories = ref([])
-const subcategories = ref([])
-const sites = ref([])
+const categories = ref<Category[]>([])
+const subcategories = ref<SubcategoryWithCategory[]>([])
+const sites = ref<Site[]>([])
 const { page, pageSize, paged } = usePagination(subcategories)
-const { selected, onSelectionChange } = useSelection()
+const { selected, onSelectionChange } = useSelection<SubcategoryWithCategory>()
 const { persistMoved, savingOrder } = useDragOrder({
-  save: (id, sort_order) => subcategoryApi.update(id, { sort_order }),
+  save: (id, sort_order) => subcategoryApi.update(String(id), { sort_order }),
   reload: loadData,
 })
 // 表格行拖拽（页内下标 + 分页偏移换算到全量位置）
@@ -25,22 +26,31 @@ const { wrap: tableWrap, init: initRowSortable } = useTableSortable({
   persist: persistMoved,
 })
 const dialogVisible = ref(false)
-const formRef = ref()
-const defaultForm = () => ({ id: null, category_id: '', name: '', slug: '', sort_order: '' })
-const form = reactive(defaultForm())
-const rules = {
+const formRef = ref<FormInstance>()
+
+interface SubcategoryFormState {
+  id: string | null
+  category_id: string
+  name: string
+  slug: string
+  sort_order: string
+}
+
+const defaultForm = (): SubcategoryFormState => ({ id: null, category_id: '', name: '', slug: '', sort_order: '' })
+const form = reactive<SubcategoryFormState>(defaultForm())
+const rules: FormRules<SubcategoryFormState> = {
   category_id: [{ required: true, message: '请选择所属分类', trigger: 'change' }],
   name: [{ required: true, message: '请输入子分类名称', trigger: 'blur' }],
 }
 
 const catMap = computed(() => new Map(categories.value.map(c => [c.id, c.name])))
 const siteCount = computed(() => {
-  const m = new Map()
-  for (const s of sites.value) m.set(s.subcategory_id, (m.get(s.subcategory_id) || 0) + 1)
+  const m = new Map<string, number>()
+  for (const s of sites.value) m.set(s.subcategory_id ?? '', (m.get(s.subcategory_id ?? '') || 0) + 1)
   return m
 })
 
-async function loadData() {
+async function loadData(): Promise<void> {
   loading.value = true
   try {
     const [cats, subs, siteData] = await Promise.all([categoryApi.list(), subcategoryApi.list(), siteApi.list()])
@@ -48,19 +58,19 @@ async function loadData() {
     subcategories.value = subs
     sites.value = siteData
   } catch (e) {
-    ElMessage.error(e.message || '加载失败')
+    ElMessage.error(e instanceof Error ? e.message : '加载失败')
   } finally {
     loading.value = false
   }
 }
-function openDialog(row) {
+function openDialog(row?: Subcategory): void {
   Object.assign(form, defaultForm())
   if (row) Object.assign(form, row)
   dialogVisible.value = true
 }
-async function save() {
+async function save(): Promise<void> {
   try {
-    await formRef.value.validate()
+    await formRef.value?.validate()
   } catch {
     return
   }
@@ -68,8 +78,9 @@ async function save() {
   try {
     const { id, ...payload } = form
     if (id) {
-      if (!payload.sort_order) delete payload.sort_order
-      await subcategoryApi.update(id, payload)
+      const body: Partial<Subcategory> = { ...payload }
+      if (!body.sort_order) delete body.sort_order
+      await subcategoryApi.update(id, body)
     } else {
       if (!payload.sort_order) payload.sort_order = appendOrderKey(subcategories.value)
       await subcategoryApi.create(payload)
@@ -78,13 +89,16 @@ async function save() {
     dialogVisible.value = false
     await loadData()
   } catch (e) {
-    ElMessage.error(e.message || '保存失败')
+    ElMessage.error(e instanceof Error ? e.message : '保存失败')
   } finally {
     saving.value = false
   }
 }
-async function handleDelete(row) {
-  if (siteCount.value.get(row.id)) return ElMessage.warning('该子分类下存在网址，请先删除或移动网址')
+async function handleDelete(row: SubcategoryWithCategory): Promise<void> {
+  if (siteCount.value.get(row.id)) {
+    ElMessage.warning('该子分类下存在网址，请先删除或移动网址')
+    return
+  }
   await ElMessageBox.confirm(`确定删除子分类「${row.name}」吗？`, '删除确认', {
     confirmButtonText: '删除',
     cancelButtonText: '取消',
@@ -95,11 +109,14 @@ async function handleDelete(row) {
     ElMessage.success('已删除')
     await loadData()
   } catch (e) {
-    ElMessage.error(e.message || '删除失败')
+    ElMessage.error(e instanceof Error ? e.message : '删除失败')
   }
 }
-async function handleBatchDelete() {
-  if (selected.value.some(r => siteCount.value.get(r.id))) return ElMessage.warning('选中的子分类中存在含有网址的子分类，请先处理其网址')
+async function handleBatchDelete(): Promise<void> {
+  if (selected.value.some(r => siteCount.value.get(r.id))) {
+    ElMessage.warning('选中的子分类中存在含有网址的子分类，请先处理其网址')
+    return
+  }
   await ElMessageBox.confirm(`确定删除选中的 ${selected.value.length} 个子分类吗？`, '批量删除', {
     confirmButtonText: '删除',
     cancelButtonText: '取消',
@@ -110,7 +127,7 @@ async function handleBatchDelete() {
     ElMessage.success('已批量删除')
     await loadData()
   } catch (e) {
-    ElMessage.error(e.message || '删除失败')
+    ElMessage.error(e instanceof Error ? e.message : '删除失败')
   }
 }
 onMounted(() => {
@@ -163,10 +180,10 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openDialog(row)">
+            <el-button link type="primary" @click="openDialog(row as Subcategory)">
               编辑
             </el-button>
-            <el-button link type="danger" @click="handleDelete(row)">
+            <el-button link type="danger" @click="handleDelete(row as SubcategoryWithCategory)">
               删除
             </el-button>
           </template>

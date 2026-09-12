@@ -31,17 +31,16 @@ services:
     restart: unless-stopped
     healthcheck:
       test:
-        [
-          "CMD-SHELL",
-          "node -e \"fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})\""
-        ]
+        - CMD-SHELL
+        - "node -e \"fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})\""
+
       timeout: 10s
       interval: 5s
       retries: 3
       start_period: 20s
     environment:
       # 监听所有 IPv4 接口
-      HOSTNAME: "0.0.0.0"
+      HOSTNAME: 0.0.0.0
 
       STUDIO_PG_META_URL: http://meta:8080
       POSTGRES_PORT: ${POSTGRES_PORT}
@@ -70,7 +69,7 @@ services:
       SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
 
       # 完整版的日志功能依赖 Analytics(Logflare)，裁剪版已移除，必须保持 false
-      ENABLED_FEATURES_LOGS_ALL: "false"
+      ENABLED_FEATURES_LOGS_ALL: 'false'
 
       SNIPPETS_MANAGEMENT_FOLDER: /app/snippets
       EDGE_FUNCTIONS_MANAGEMENT_FOLDER: /app/edge-functions
@@ -86,7 +85,7 @@ services:
     image: kong/kong:3.9.3
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "kong", "health"]
+      test: [CMD, kong, health]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -103,7 +102,7 @@ services:
       # - ./volumes/api/server.crt:/home/kong/server.crt:ro
       # - ./volumes/api/server.key:/home/kong/server.key:ro
     environment:
-      KONG_DATABASE: "off"
+      KONG_DATABASE: off
       KONG_DECLARATIVE_CONFIG: /usr/local/kong/kong.yml
       KONG_ROUTER_FLAVOR: expressions
       KONG_DNS_ORDER: LAST,A,CNAME
@@ -118,7 +117,7 @@ services:
       SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
       DASHBOARD_USERNAME: ${DASHBOARD_USERNAME}
       DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
-    entrypoint: ["/bin/sh", "/home/kong/kong-entrypoint.sh"]
+    entrypoint: [/bin/sh, /home/kong/kong-entrypoint.sh]
 
   auth:
     container_name: supabase-auth
@@ -126,14 +125,13 @@ services:
     restart: unless-stopped
     healthcheck:
       test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:9999/health"
-        ]
+        - CMD
+        - wget
+        - --no-verbose
+        - --tries=1
+        - --spider
+        - 'http://localhost:9999/health'
+
       timeout: 5s
       interval: 5s
       retries: 3
@@ -191,7 +189,7 @@ services:
         # 使用外部 Postgres 时可去掉这行
         condition: service_healthy
     healthcheck:
-      test: [ "CMD", "postgrest", "--ready" ]
+      test: [CMD, postgrest, --ready]
       interval: 5s
       timeout: 5s
       retries: 3
@@ -208,13 +206,11 @@ services:
       # PostgREST 接受明文对称密钥、单个 JWK 或 JWKS
       PGRST_JWT_SECRET: ${JWT_SECRET}
 
-      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_DB_USE_LEGACY_GUCS: 'false'
       PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
       PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY}
     command:
-      [
-        "postgrest"
-      ]
+      - postgrest
 
   # Studio 的元数据服务（Table Editor / SQL Editor 等都经由它读写数据库结构）
   meta:
@@ -253,14 +249,13 @@ services:
       - db-config:/etc/postgresql-custom
     healthcheck:
       test:
-        [
-        "CMD",
-        "pg_isready",
-        "-U",
-        "postgres",
-        "-h",
-        "localhost"
-        ]
+        - CMD
+        - pg_isready
+        - -U
+        - postgres
+        - -h
+        - localhost
+
       interval: 5s
       timeout: 5s
       retries: 10
@@ -275,13 +270,11 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXP: ${JWT_EXPIRY}
     command:
-      [
-        "postgres",
-        "-c",
-        "config_file=/etc/postgresql/postgresql.conf",
-        "-c",
-        "log_min_messages=fatal"
-      ]
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+      - -c
+      - log_min_messages=fatal
 
 volumes:
   db-config:

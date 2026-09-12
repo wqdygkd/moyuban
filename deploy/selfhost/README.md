@@ -6,14 +6,14 @@
 
 ### 保留的容器
 
-| 容器 | 镜像 | 作用 | 内存（粗估） |
-|---|---|---|---|
-| db | supabase/postgres | PostgreSQL 数据库（内置 auth / RLS 所需的全部 schema） | 300~500MB |
-| rest | postgrest/postgrest | REST API（`/rest/v1/*`），前端所有数据读写走这里 | 30~50MB |
-| auth | supabase/gotrue | 邮箱+密码登录、会话签发 | 50~100MB |
-| meta | supabase/postgres-meta | Studio 的数据库管理接口 | 50~100MB |
-| api-gw | kong/kong | API 网关：路由 + API Key 校验 + Studio 的 Basic Auth 保护 | 100~150MB |
-| studio | supabase/studio | 网页控制台（建表、看数据、创建管理员账号） | 400~700MB |
+| 容器   | 镜像                   | 作用                                                      | 内存（粗估） |
+| ------ | ---------------------- | --------------------------------------------------------- | ------------ |
+| db     | supabase/postgres      | PostgreSQL 数据库（内置 auth / RLS 所需的全部 schema）    | 300~500MB    |
+| rest   | postgrest/postgrest    | REST API（`/rest/v1/*`），前端所有数据读写走这里          | 30~50MB      |
+| auth   | supabase/gotrue        | 邮箱+密码登录、会话签发                                   | 50~100MB     |
+| meta   | supabase/postgres-meta | Studio 的数据库管理接口                                   | 50~100MB     |
+| api-gw | kong/kong              | API 网关：路由 + API Key 校验 + Studio 的 Basic Auth 保护 | 100~150MB    |
+| studio | supabase/studio        | 网页控制台（建表、看数据、创建管理员账号）                | 400~700MB    |
 
 ### 移除的组件（官方完整版中有）
 
@@ -97,12 +97,12 @@ sh generate-keys.sh --update-env
 
 `generate-keys.sh` 覆盖不到、**必须手动改**的变量：
 
-| 变量 | 说明 | 直连服务器（无域名） | 配了域名 + HTTPS |
-|---|---|---|---|
-| `SUPABASE_PUBLIC_URL` | 浏览器/前端访问 Supabase 的地址 | `http://服务器IP:8000` | `https://supabase.example.com` |
-| `API_EXTERNAL_URL` | Auth 对外地址，固定以 `/auth/v1` 结尾 | `http://服务器IP:8000/auth/v1` | `https://supabase.example.com/auth/v1` |
-| `SITE_URL` | 摸鱼办前端站点地址 | `http://服务器IP` | `https://nav.example.com` |
-| `DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD` | Studio 控制台登录账号 | 自行修改 | 自行修改 |
+| 变量                                        | 说明                                  | 直连服务器（无域名）           | 配了域名 + HTTPS                       |
+| ------------------------------------------- | ------------------------------------- | ------------------------------ | -------------------------------------- |
+| `SUPABASE_PUBLIC_URL`                       | 浏览器/前端访问 Supabase 的地址       | `http://服务器IP:8000`         | `https://supabase.example.com`         |
+| `API_EXTERNAL_URL`                          | Auth 对外地址，固定以 `/auth/v1` 结尾 | `http://服务器IP:8000/auth/v1` | `https://supabase.example.com/auth/v1` |
+| `SITE_URL`                                  | 摸鱼办前端站点地址                    | `http://服务器IP`              | `https://nav.example.com`              |
+| `DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD` | Studio 控制台登录账号                 | 自行修改                       | 自行修改                               |
 
 其余默认值已按摸鱼办的使用方式调好：
 
@@ -246,15 +246,15 @@ docker compose down -v             # 彻底重置（⚠️ 删除数据卷，重
 
 ## 八、故障排查
 
-| 现象 | 原因 / 处理 |
-|---|---|
-| Studio 打不开或一直 unhealthy | 先等 20 秒预热；`docker compose logs studio`；2G 服务器确认 swap 已配置（内存不足会被 OOM kill） |
-| 访问 8000 弹出浏览器登录框 | 正常，这是 Kong 对 Studio 的 Basic Auth，用 `DASHBOARD_USERNAME/PASSWORD` |
-| 前端报 `Invalid API key` | `.env` 的 `ANON_KEY` 与构建前端时填的 `VITE_SUPABASE_ANON_KEY` 不一致，重新 build |
-| 登录报 400/凭据错误 | 检查 `SUPABASE_PUBLIC_URL` 与 `API_EXTERNAL_URL` 是否一致（协议、域名都要对），改后 `docker compose restart auth kong studio` |
-| 导入 schema.sql 报角色不存在 | 说明 db 容器初始化脚本未执行——多发生在 `down -v` 重置前挂载过数据目录；`docker compose down -v` 后重新 `up -d` 再导入 |
-| psql 导入报 `already exists` | 表已建过，schema.sql 均为 `if not exists`，可忽略；或先 `drop table` 后重导 |
-| REST 请求 404 | 检查 `PGRST_DB_SCHEMAS` 是否含 `public`，`docker compose restart rest` |
+| 现象                          | 原因 / 处理                                                                                                                   |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Studio 打不开或一直 unhealthy | 先等 20 秒预热；`docker compose logs studio`；2G 服务器确认 swap 已配置（内存不足会被 OOM kill）                              |
+| 访问 8000 弹出浏览器登录框    | 正常，这是 Kong 对 Studio 的 Basic Auth，用 `DASHBOARD_USERNAME/PASSWORD`                                                     |
+| 前端报 `Invalid API key`      | `.env` 的 `ANON_KEY` 与构建前端时填的 `VITE_SUPABASE_ANON_KEY` 不一致，重新 build                                             |
+| 登录报 400/凭据错误           | 检查 `SUPABASE_PUBLIC_URL` 与 `API_EXTERNAL_URL` 是否一致（协议、域名都要对），改后 `docker compose restart auth kong studio` |
+| 导入 schema.sql 报角色不存在  | 说明 db 容器初始化脚本未执行——多发生在 `down -v` 重置前挂载过数据目录；`docker compose down -v` 后重新 `up -d` 再导入         |
+| psql 导入报 `already exists`  | 表已建过，schema.sql 均为 `if not exists`，可忽略；或先 `drop table` 后重导                                                   |
+| REST 请求 404                 | 检查 `PGRST_DB_SCHEMAS` 是否含 `public`，`docker compose restart rest`                                                        |
 
 ## 九、与官方完整版的差异（想加回组件时）
 

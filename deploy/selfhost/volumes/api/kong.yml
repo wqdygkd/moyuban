@@ -1,14 +1,14 @@
 _format_version: '2.1'
 _transform: true
 
-###
-### 裁剪版 Kong 声明式路由
-### 基于官方 docker/volumes/api/kong.yml（2026-09 快照），
-### 移除了 realtime / storage / functions 相关路由（对应服务未部署）。
-### 入口脚本 kong-entrypoint.sh 会在启动时用环境变量替换 $VAR。
-###
-### Consumers / Users
-###
+# ##
+# ## 裁剪版 Kong 声明式路由
+# ## 基于官方 docker/volumes/api/kong.yml（2026-09 快照），
+# ## 移除了 realtime / storage / functions 相关路由（对应服务未部署）。
+# ## 入口脚本 kong-entrypoint.sh 会在启动时用环境变量替换 $VAR。
+# ##
+# ## Consumers / Users
+# ##
 consumers:
   - username: DASHBOARD
   - username: anon
@@ -18,28 +18,28 @@ consumers:
     keyauth_credentials:
       - key: $SUPABASE_SERVICE_KEY
 
-###
-### Access Control List
-###
+# ##
+# ## Access Control List
+# ##
 acls:
   - consumer: anon
     group: anon
   - consumer: service_role
     group: admin
 
-###
-### Dashboard credentials
-###
+# ##
+# ## Dashboard credentials
+# ##
 basicauth_credentials:
   - consumer: DASHBOARD
-    username: '$DASHBOARD_USERNAME'
-    password: '$DASHBOARD_PASSWORD'
+    username: $DASHBOARD_USERNAME
+    password: $DASHBOARD_PASSWORD
 
-###
-### API Routes
-###
+# ##
+# ## API Routes
+# ##
 services:
-  ## Open Auth routes
+  # # Open Auth routes
   - name: auth-v1-open
     _comment: 'Auth: /auth/v1/verify* -> http://auth:9999/verify*'
     url: http://auth:9999/verify
@@ -82,26 +82,26 @@ services:
       - name: cors
 
   - name: auth-v1-open-sso-acs
-    url: "http://auth:9999/sso/saml/acs"
+    url: 'http://auth:9999/sso/saml/acs'
     routes:
       - name: auth-v1-open-sso-acs
         strip_path: true
         paths:
-        - /auth/v1/sso/saml/acs
+          - /auth/v1/sso/saml/acs
     plugins:
       - name: cors
 
   - name: auth-v1-open-sso-metadata
-    url: "http://auth:9999/sso/saml/metadata"
+    url: 'http://auth:9999/sso/saml/metadata'
     routes:
       - name: auth-v1-open-sso-metadata
         strip_path: true
         paths:
-        - /auth/v1/sso/saml/metadata
+          - /auth/v1/sso/saml/metadata
     plugins:
       - name: cors
 
-  ## Secure Auth routes
+  # # Secure Auth routes
   - name: auth-v1
     _comment: 'Auth: /auth/v1/* -> http://auth:9999/*'
     url: http://auth:9999/
@@ -119,10 +119,10 @@ services:
         config:
           add:
             headers:
-              - "Authorization: $LUA_AUTH_EXPR"
+              - 'Authorization: $LUA_AUTH_EXPR'
           replace:
             headers:
-              - "Authorization: $LUA_AUTH_EXPR"
+              - 'Authorization: $LUA_AUTH_EXPR'
       - name: acl
         config:
           hide_groups_header: true
@@ -130,7 +130,7 @@ services:
             - admin
             - anon
 
-  ## OpenAPI root - admin only
+  # # OpenAPI root - admin only
   - name: rest-v1-openapi
     _comment: 'PostgREST OpenAPI root: /rest/v1/ -> http://rest:3000/ (admin only). See https://github.com/orgs/supabase/discussions/42949'
     url: http://rest:3000/
@@ -147,17 +147,17 @@ services:
         config:
           add:
             headers:
-              - "Authorization: $LUA_AUTH_EXPR"
+              - 'Authorization: $LUA_AUTH_EXPR'
           replace:
             headers:
-              - "Authorization: $LUA_AUTH_EXPR"
+              - 'Authorization: $LUA_AUTH_EXPR'
       - name: acl
         config:
           hide_groups_header: true
           allow:
             - admin
 
-  ## Secure PostgREST routes
+  # # Secure PostgREST routes
   - name: rest-v1
     _comment: 'PostgREST: /rest/v1/* -> http://rest:3000/*'
     url: http://rest:3000/
@@ -175,10 +175,10 @@ services:
         config:
           add:
             headers:
-              - "Authorization: $LUA_AUTH_EXPR"
+              - 'Authorization: $LUA_AUTH_EXPR'
           replace:
             headers:
-              - "Authorization: $LUA_AUTH_EXPR"
+              - 'Authorization: $LUA_AUTH_EXPR'
       - name: acl
         config:
           hide_groups_header: true
@@ -186,7 +186,7 @@ services:
             - admin
             - anon
 
-  ## Secure GraphQL routes
+  # # Secure GraphQL routes
   - name: graphql-v1
     _comment: 'PostgREST: /graphql/v1/* -> http://rest:3000/rpc/graphql'
     url: http://rest:3000/rpc/graphql
@@ -204,11 +204,11 @@ services:
         config:
           add:
             headers:
-              - "Content-Profile: graphql_public"
-              - "Authorization: $LUA_AUTH_EXPR"
+              - 'Content-Profile: graphql_public'
+              - 'Authorization: $LUA_AUTH_EXPR'
           replace:
             headers:
-              - "Authorization: $LUA_AUTH_EXPR"
+              - 'Authorization: $LUA_AUTH_EXPR'
       - name: acl
         config:
           hide_groups_header: true
@@ -216,7 +216,7 @@ services:
             - admin
             - anon
 
-  ## OAuth 2.0 Authorization Server Metadata (RFC 8414)
+  # # OAuth 2.0 Authorization Server Metadata (RFC 8414)
   - name: well-known-oauth
     _comment: 'Auth: /.well-known/oauth-authorization-server -> http://auth:9999/.well-known/oauth-authorization-server'
     url: http://auth:9999/.well-known/oauth-authorization-server
@@ -228,7 +228,7 @@ services:
     plugins:
       - name: cors
 
-  ## Secure Database routes
+  # # Secure Database routes
   - name: meta
     _comment: 'pg-meta: /pg/* -> http://pg-meta:8080/*'
     url: http://meta:8080/
@@ -247,9 +247,9 @@ services:
           allow:
             - admin
 
-  ## Block access to /api/mcp
+  # # Block access to /api/mcp
   - name: mcp-blocker
-    _comment: 'Block direct access to /api/mcp'
+    _comment: Block direct access to /api/mcp
     url: http://studio:3000/api/mcp
     routes:
       - name: mcp-blocker-route
@@ -260,9 +260,9 @@ services:
       - name: request-termination
         config:
           status_code: 403
-          message: "Access is forbidden."
+          message: Access is forbidden.
 
-  ## MCP endpoint - local access
+  # # MCP endpoint - local access
   - name: mcp
     _comment: 'MCP: /mcp -> http://studio:3000/api/mcp (local access)'
     url: http://studio:3000/api/mcp
@@ -276,10 +276,10 @@ services:
       - name: request-termination
         config:
           status_code: 403
-          message: "Access is forbidden."
+          message: Access is forbidden.
 
-  ## Protected Dashboard - catch all remaining routes
-  ## Studio 挂在网关根路径下，由 Basic Auth 保护（DASHBOARD_USERNAME/PASSWORD）
+  # # Protected Dashboard - catch all remaining routes
+  # # Studio 挂在网关根路径下，由 Basic Auth 保护（DASHBOARD_USERNAME/PASSWORD）
   - name: dashboard
     _comment: 'Studio: /* -> http://studio:3000/*'
     url: http://studio:3000/

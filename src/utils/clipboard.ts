@@ -1,12 +1,12 @@
 import { ElMessage } from 'element-plus'
 
 // 复制文本：优先 Clipboard API，降级用 textarea + execCommand（非安全上下文）
-export async function copyText(text) {
-  if (!text) return false
+export async function copyText(text: string): Promise<void> {
+  if (!text) return
   try {
     await navigator.clipboard.writeText(text)
     ElMessage.success('已复制')
-    return true
+    return
   } catch {
     // Clipboard API 不可用，走降级
   }
@@ -21,9 +21,7 @@ export async function copyText(text) {
     ta.remove()
     if (ok) ElMessage.success('已复制')
     else ElMessage.error('复制失败')
-    return ok
   } catch {
     ElMessage.error('复制失败')
-    return false
   }
 }

@@ -27,4 +27,13 @@ export default antfu(
       globals: autoImportGlobals,
     },
   },
+  // src/types 统一用 type 不用 interface：supabase-js 的 GenericTable
+  // 要求 Row/Insert/Update 满足 Record<string, unknown>，
+  // interface 没有隐式索引签名，传给 SupabaseClient<Database> 会退化成 never。
+  {
+    files: ['src/types/**/*.ts'],
+    rules: {
+      'ts/consistent-type-definitions': ['error', 'type'],
+    },
+  },
 )

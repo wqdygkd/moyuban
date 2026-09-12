@@ -20,13 +20,16 @@ export default defineConfig({
     // （eslint.config.js 读它识别全局变量，两个文件都要提交）。
     AutoImport({
       imports: ['vue', 'vue-router'],
-      dts: true,
+      dts: 'src/auto-imports.d.ts',
+      dirs: ['src/composables', 'src/store'],
+      vueTemplate: true,
       eslintrc: { enabled: true },
     }),
     // 模板里的 el-* 标签和 v-loading 等指令才需要自动引入，由 Components 负责。
     Components({
       resolvers: [ElementPlusResolver({ importStyle: 'sass' })],
-      dts: false,
+      dts: 'src/components.d.ts',
+      deep: true,
     }),
     VitePWA({
       registerType: 'autoUpdate',
@@ -80,13 +83,7 @@ export default defineConfig({
     __VUE_OPTIONS_API__: false,
     __VUE_PROD_DEVTOOLS__: false,
   },
-  css: {
-    preprocessorOptions: {
-      scss: {
-        api: 'modern-compiler',
-      },
-    },
-  },
+  // sass-embedded 只有 modern API（Vite 8 已去掉 api 开关），无需配置。
   optimizeDeps: {
     include: ['vue', 'vue-router', '@supabase/supabase-js'],
   },
@@ -97,7 +94,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        manualChunks(id) {
+        manualChunks(id: string) {
           if (!id.includes('node_modules')) {
             return
           }

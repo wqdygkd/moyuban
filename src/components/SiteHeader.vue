@@ -1,4 +1,5 @@
-<script setup>
+<script setup lang="ts">
+import type { ThemeName } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/store/auth'
 import { useTheme } from '@/utils/theme'
@@ -8,18 +9,18 @@ const theme = useTheme()
 const THEMES = theme.THEMES
 const currentTheme = computed(() => theme.current.value)
 
-const THEME_LABEL = {
+const THEME_LABEL: Record<ThemeName, string> = {
   douyin: '抖音',
   xhs: '小红书',
   kuaishou: '快手',
   shipinhao: '视频号',
 }
 
-function themeLabel(t) {
+function themeLabel(t: ThemeName): string {
   return THEME_LABEL[t] || t
 }
 
-function onThemeCommand(t) {
+function onThemeCommand(t: ThemeName): void {
   theme.set(t)
 }
 

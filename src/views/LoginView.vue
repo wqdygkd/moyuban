@@ -1,4 +1,5 @@
-<script setup>
+<script setup lang="ts">
+import type { FormInstance, FormRules } from 'element-plus'
 import { Lock, Message } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { supabase } from '@/lib/supabase'
@@ -8,18 +9,23 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
-const formRef = ref()
+const formRef = ref<FormInstance>()
 const loading = ref(false)
 const message = ref('')
 
 const supabaseReady = computed(() => !!supabase)
 
-const form = reactive({
+interface LoginForm {
+  email: string
+  password: string
+}
+
+const form = reactive<LoginForm>({
   email: '',
   password: '',
 })
 
-const rules = {
+const rules: FormRules<LoginForm> = {
   email: [
     { required: true, message: '请输入邮箱', trigger: 'blur' },
     { type: 'email', message: '邮箱格式不正确', trigger: 'blur' },
@@ -30,16 +36,16 @@ const rules = {
   ],
 }
 
-async function validate() {
+async function validate(): Promise<boolean> {
   try {
-    await formRef.value.validate()
+    await formRef.value?.validate()
     return true
   } catch {
     return false
   }
 }
 
-async function submit() {
+async function submit(): Promise<void> {
   if (!(await validate())) return
   loading.value = true
   message.value = ''
@@ -49,7 +55,7 @@ async function submit() {
     const redirect = route.query.redirect || '/'
     router.push(String(redirect))
   } catch (e) {
-    message.value = e.message || '登录失败'
+    message.value = e instanceof Error ? e.message : '登录失败'
   } finally {
     loading.value = false
   }

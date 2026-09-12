@@ -1,42 +1,35 @@
-<script setup>
+<script setup lang="ts">
+import type { CategoryHome, SiteHome, SubcategoryHome } from '@/types'
 import SiteCard from '@/components/SiteCard.vue'
 import { fetchCategories, fetchSites, fetchSubcategories } from '@/services/api'
 import { readHomeCache, writeHomeCache } from '@/utils/cache'
+import { groupBy } from '@/utils/group'
 
 const route = useRoute()
 const router = useRouter()
 const loading = ref(true)
 const error = ref('')
-const categories = ref([])
-const subcategories = ref([])
-const sites = ref([])
+const categories = ref<CategoryHome[]>([])
+const subcategories = ref<SubcategoryHome[]>([])
+const sites = ref<SiteHome[]>([])
 
 const catId = computed(() => String(route.params.id ?? ''))
 const category = computed(() => categories.value.find(c => String(c.id) === catId.value))
 const subs = computed(() => subcategories.value.filter(s => String(s.category_id) === catId.value))
-const sitesBySub = computed(() => {
-  const m = new Map()
-  for (const s of sites.value) {
-    const key = String(s.subcategory_id)
-    const a = m.get(key)
-    if (a) a.push(s)
-    else m.set(key, [s])
-  }
-  return m
-})
-function sitesOfSub(subId) {
+const sitesBySub = computed(() => groupBy(sites.value, s => s.subcategory_id))
+function sitesOfSub(subId: string | number): SiteHome[] {
   return sitesBySub.value.get(String(subId)) || []
 }
 const totalSites = computed(() => subs.value.reduce((n, s) => n + sitesOfSub(s.id).length, 0))
 
-function applyCache(c) {
+function applyCache(c: ReturnType<typeof readHomeCache>): boolean {
   if (!c) return false
   categories.value = c.categories || []
   subcategories.value = c.subcategories || []
   sites.value = c.sites || []
   return true
 }
-async function loadData() {
+async function loadData(): Promise<void> {
   try {
     const [cats, subs, ss] = await Promise.all([fetchCategories(), fetchSubcategories(), fetchSites()])
     categories.value = cats
@@ -44,7 +37,7 @@ async function loadData() {
     sites.value = ss
     writeHomeCache({ categories: cats, subcategories: subs, sites: ss, version: readHomeCache()?.version })
   } catch (e) {
-    if (!categories.value.length) error.value = e.message || '加载失败，请检查 Supabase 配置'
+    if (!categories.value.length) error.value = e instanceof Error ? e.message : '加载失败，请检查 Supabase 配置'
   } finally {
     loading.value = false
   }

@@ -1,10 +1,15 @@
-<script setup>
+<script setup lang="ts">
 defineOptions({ name: 'FaviconImg' })
-const props = defineProps({
-  candidates: { type: Array, default: () => [] },
-  alt: { type: String, default: '' },
-  size: { type: Number, default: 32 },
-  imgClass: { type: String, default: '' },
+const props = withDefaults(defineProps<{
+  candidates?: string[]
+  alt?: string
+  size?: number
+  imgClass?: string
+}>(), {
+  candidates: () => [],
+  alt: '',
+  size: 32,
+  imgClass: '',
 })
 
 const idx = ref(0)

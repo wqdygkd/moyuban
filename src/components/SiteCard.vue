@@ -1,20 +1,25 @@
-<script setup>
+<script setup lang="ts">
+import type { SiteHome } from '@/types'
 import FaviconImg from '@/components/FaviconImg.vue'
 import { siteApi } from '@/services/api'
 import { getFaviconCandidates } from '@/utils/favicon'
 
 defineOptions({ name: 'SiteCard' })
-const props = defineProps({
-  site: { type: Object, required: true },
-  editMode: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{
+  site: SiteHome
+  editMode?: boolean
+}>(), {
+  editMode: false,
 })
-const emit = defineEmits(['edit'])
+const emit = defineEmits<{
+  edit: []
+}>()
 const faviconCandidates = computed(() => {
   // 前台图标优先级：favicon_url（手动）> image_url > 自动嗅探，失败逐个降级；
   // 用 Set 去重（原来是 list.includes 逐个扫描，O(n²)）
-  const seen = new Set()
-  const list = []
-  const push = (u) => {
+  const seen = new Set<string>()
+  const list: string[] = []
+  const push = (u: string | null | undefined) => {
     if (u && !seen.has(u)) {
       seen.add(u)
       list.push(u)
@@ -35,7 +40,7 @@ function handleClick() {
     clicked = false
   })
 }
-function onCardClick(e) {
+function onCardClick(e: MouseEvent): void {
   // 编辑模式下点击卡片不再跳转，交给外层打开编辑弹窗
   if (props.editMode) {
     e.preventDefault()
@@ -59,7 +64,7 @@ function onCardClick(e) {
         <div class="card-title-row">
           <span class="card-title ellipsis">{{ site.name }}</span>
         </div>
-        <p class="card-desc ellipsis" :title="site.description">{{ site.description || '—' }}</p>
+        <p class="card-desc ellipsis" :title="site.description ?? ''">{{ site.description || '—' }}</p>
       </div>
     </div>
     <span v-if="site.is_hot || site.is_featured" class="card-flags">

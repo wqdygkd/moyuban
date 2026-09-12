@@ -1,18 +1,21 @@
-<script setup>
+<script setup lang="ts">
 import { copyText } from '@/utils/clipboard'
 import { getFaviconSource } from '@/utils/favicon'
 
 defineOptions({ name: 'FaviconField' })
-const props = defineProps({
-  candidates: { type: Array, default: () => [] },
-  placeholder: { type: String, default: '留空自动按多源解析' },
+const props = withDefaults(defineProps<{
+  candidates?: string[]
+  placeholder?: string
+}>(), {
+  candidates: () => [],
+  placeholder: '留空自动按多源解析',
 })
-const model = defineModel({ type: String, default: '' })
+const model = defineModel<string>({ default: '' })
 // 来源标签只解析一次：模板里原来每个候选调 3 次 getFaviconSource
 const candidateMetas = computed(() => props.candidates.map(u => ({ url: u, source: getFaviconSource(u) })))
 
-function onImgError(e) {
-  e.target.classList.add('is-broken')
+function onImgError(e: Event): void {
+  ;(e.target as HTMLImageElement).classList.add('is-broken')
 }
 </script>
 

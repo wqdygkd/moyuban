@@ -1,7 +1,8 @@
-<script setup>
+<script setup lang="ts">
+import type { CascaderProps, FormInstance, FormRules } from 'element-plus'
+import type { Category, Site, SubcategoryWithCategory } from '@/types'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import FaviconField from '@/components/FaviconField.vue'
 import FaviconImg from '@/components/FaviconImg.vue'
 import { categoryApi, siteApi, subcategoryApi } from '@/services/api'
@@ -10,19 +11,37 @@ import { getFaviconCandidates } from '@/utils/favicon'
 const loading = ref(false)
 const saving = ref(false)
 const keyword = ref('')
-const filterPath = ref([])
-const categories = ref([])
-const subcategories = ref([])
-const sites = ref([])
+const filterPath = ref<Array<string | number>>([])
+const categories = ref<Category[]>([])
+const subcategories = ref<SubcategoryWithCategory[]>([])
+const sites = ref<Site[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(10)
-const selected = ref([])
+const selected = ref<Site[]>([])
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 const dialogVisible = ref(false)
-const formRef = ref()
-const onSelectionChange = rows => (selected.value = rows)
-function defaultForm() {
+const formRef = ref<FormInstance>()
+const onSelectionChange = (rows: Site[]): Site[] => (selected.value = rows)
+
+interface SiteFormState {
+  id: string | null
+  category_id: string
+  subcategory_id: string
+  name: string
+  url: string
+  description: string
+  keywords: string
+  favicon_url: string
+  image_url: string
+  is_featured: boolean
+  is_hot: boolean
+  is_new: boolean
+  is_active: boolean
+  sort_order: string
+}
+
+function defaultForm(): SiteFormState {
   return {
     id: null,
     category_id: '',
@@ -40,8 +59,8 @@ function defaultForm() {
     sort_order: '',
   }
 }
-const form = reactive(defaultForm())
-const rules = {
+const form = reactive<SiteFormState>(defaultForm())
+const rules: FormRules<SiteFormState> = {
   category_id: [{ required: true, message: '请选择所属分类', trigger: 'change' }],
   subcategory_id: [{ required: true, message: '请选择所属子分类', trigger: 'change' }],
   name: [{ required: true, message: '请输入网站名称', trigger: 'blur' }],
@@ -68,33 +87,33 @@ const cascaderOptions = computed(() =>
     children: subcategories.value.filter(s => s.category_id === c.id).map(s => ({ value: s.id, label: s.name })),
   })),
 )
-const cascaderProps = { checkStrictly: true, emitPath: true, expandTrigger: 'hover' }
-function catOf(subId) {
-  const sub = subMap.value.get(subId)
+const cascaderProps: CascaderProps = { checkStrictly: true, emitPath: true, expandTrigger: 'hover' }
+function catOf(subId: string | null): string {
+  const sub = subId ? subMap.value.get(subId) : undefined
   return sub ? catMap.value.get(sub.category_id) || '-' : '-'
 }
-function subOf(subId) {
-  return subMap.value.get(subId)?.name || '-'
+function subOf(subId: string | null): string {
+  return (subId && subMap.value.get(subId)?.name) || '-'
 }
-function faviconCandidates(row) {
+function faviconCandidates(row: Site): string[] {
   if (row.image_url) return []
   return getFaviconCandidates({ url: row.url, favicon_url: row.favicon_url })
 }
-function onPreviewError(e) {
-  e.target.style.display = 'none'
+function onPreviewError(e: Event): void {
+  ;(e.target as HTMLImageElement).style.display = 'none'
 }
 const hostCandidates = computed(() => getFaviconCandidates({ url: form.url }))
 
-async function loadMeta() {
+async function loadMeta(): Promise<void> {
   const [cats, subs] = await Promise.all([categoryApi.list(), subcategoryApi.list()])
   categories.value = cats
   subcategories.value = subs
 }
 
-async function fetchPaged() {
+async function fetchPaged(): Promise<void> {
   loading.value = true
   try {
-    let subcategoryIds
+    let subcategoryIds: string[] | undefined
     const path = Array.isArray(filterPath.value) ? filterPath.value : []
     if (path.length === 1) {
       const catId = path[0]
@@ -105,33 +124,33 @@ async function fetchPaged() {
         return
       }
     } else if (path.length === 2) {
-      subcategoryIds = [path[1]]
+      subcategoryIds = [String(path[1])]
     }
     const { data, total: t } = await siteApi.listPaged({ page: page.value, pageSize: pageSize.value, keyword: keyword.value.trim(), subcategoryIds })
     sites.value = data
     total.value = t
     if (page.value > totalPages.value) page.value = totalPages.value
   } catch (e) {
-    ElMessage.error(e.message || '加载失败')
+    ElMessage.error(e instanceof Error ? e.message : '加载失败')
   } finally {
     loading.value = false
   }
 }
 
-async function loadData() {
+async function loadData(): Promise<void> {
   try {
     await loadMeta()
     page.value = 1
     await fetchPaged()
   } catch (e) {
-    ElMessage.error(e.message || '加载失败')
+    ElMessage.error(e instanceof Error ? e.message : '加载失败')
   }
 }
 
 // 搜索/筛选防抖，避免每键一次请求；page/pageSize 变更直接拉取
-let searchTimer = null
+let searchTimer: ReturnType<typeof setTimeout> | null = null
 watch(keyword, () => {
-  clearTimeout(searchTimer)
+  if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
     if (page.value === 1) fetchPaged()
     else page.value = 1
@@ -146,28 +165,42 @@ watch(pageSize, () => {
   else page.value = 1
 })
 watch(page, fetchPaged)
-onBeforeUnmount(() => clearTimeout(searchTimer))
-function openDialog(row) {
+onBeforeUnmount(() => {
+  if (searchTimer) clearTimeout(searchTimer)
+})
+function openDialog(row?: Site): void {
   Object.assign(form, defaultForm())
-  if (row) Object.assign(form, { ...row, category_id: subMap.value.get(row.subcategory_id)?.category_id || '' })
+  if (row) Object.assign(form, { ...row, category_id: (row.subcategory_id && subMap.value.get(row.subcategory_id)?.category_id) || '' })
   dialogVisible.value = true
 }
-async function save() {
+async function save(): Promise<void> {
   try {
-    await formRef.value.validate()
+    await formRef.value?.validate()
   } catch {
     return
   }
   saving.value = true
   try {
-    const { id, ...payload } = form
-    const isCreate = !id
-    delete payload.category_id
+    const isCreate = !form.id
+    const payload: Omit<SiteFormState, 'id' | 'category_id' | 'sort_order'> & { sort_order?: string } = {
+      subcategory_id: form.subcategory_id,
+      name: form.name,
+      url: form.url,
+      description: form.description,
+      keywords: form.keywords,
+      favicon_url: form.favicon_url,
+      image_url: form.image_url,
+      is_featured: form.is_featured,
+      is_hot: form.is_hot,
+      is_new: form.is_new,
+      is_active: form.is_active,
+      sort_order: form.sort_order,
+    }
     if (isCreate && !payload.sort_order) payload.sort_order = await siteApi.endKeyForSub(payload.subcategory_id)
     else if (!payload.sort_order) delete payload.sort_order
-    if (id) await siteApi.update(id, payload)
+    if (form.id) await siteApi.update(form.id, payload)
     else await siteApi.create(payload)
-    ElMessage.success(id ? '更新成功' : '新增成功')
+    ElMessage.success(form.id ? '更新成功' : '新增成功')
     dialogVisible.value = false
     if (!isCreate) {
       await fetchPaged() // 更新：留在本页刷新
@@ -177,12 +210,12 @@ async function save() {
       page.value = 1 // watcher 自动拉取第一页；不能再手动调一次，否则一次保存发两次请求
     }
   } catch (e) {
-    ElMessage.error(e.message || '保存失败')
+    ElMessage.error(e instanceof Error ? e.message : '保存失败')
   } finally {
     saving.value = false
   }
 }
-async function handleDelete(row) {
+async function handleDelete(row: Site): Promise<void> {
   await ElMessageBox.confirm(`确定删除「${row.name}」吗？`, '删除确认', { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' })
   try {
     await siteApi.remove(row.id)
@@ -192,10 +225,10 @@ async function handleDelete(row) {
     if (sites.value.length <= 1 && page.value > 1) page.value--
     else await fetchPaged()
   } catch (e) {
-    ElMessage.error(e.message || '删除失败')
+    ElMessage.error(e instanceof Error ? e.message : '删除失败')
   }
 }
-async function handleBatchDelete() {
+async function handleBatchDelete(): Promise<void> {
   await ElMessageBox.confirm(`确定删除选中的 ${selected.value.length} 个网址吗？`, '批量删除', {
     confirmButtonText: '删除',
     cancelButtonText: '取消',
@@ -209,7 +242,7 @@ async function handleBatchDelete() {
     if (emptied && page.value > 1) page.value-- // 本页删空，回上一页（watcher 拉取）
     else await fetchPaged()
   } catch (e) {
-    ElMessage.error(e.message || '删除失败')
+    ElMessage.error(e instanceof Error ? e.message : '删除失败')
   }
 }
 onMounted(loadData)
@@ -249,7 +282,7 @@ onMounted(loadData)
         <el-table-column label="图标" width="70">
           <template #default="{ row }">
             <img v-if="row.image_url" :src="row.image_url" class="table-img">
-            <FaviconImg v-else :candidates="faviconCandidates(row)" :alt="row.name" :size="26" img-class="table-ico">
+            <FaviconImg v-else :candidates="faviconCandidates(row as Site)" :alt="row.name" :size="26" img-class="table-ico">
               <span class="table-letter">{{ row.name[0] }}</span>
             </FaviconImg>
           </template>
@@ -286,10 +319,10 @@ onMounted(loadData)
         <el-table-column prop="click_count" label="点击" width="80" />
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openDialog(row)">
+            <el-button link type="primary" @click="openDialog(row as Site)">
               编辑
             </el-button>
-            <el-button link type="danger" @click="handleDelete(row)">
+            <el-button link type="danger" @click="handleDelete(row as Site)">
               删除
             </el-button>
           </template>

@@ -1,6 +1,7 @@
-<script setup>
+<script setup lang="ts">
+import type { FormInstance, FormRules } from 'element-plus'
+import type { Category, SubcategoryWithCategory } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useDragOrder, useTableSortable } from '@/composables/use-drag-order'
 import { usePagination, useSelection } from '@/composables/use-pagination'
 import { categoryApi, subcategoryApi } from '@/services/api'
@@ -8,12 +9,12 @@ import { appendOrderKey } from '@/utils/order'
 
 const loading = ref(false)
 const saving = ref(false)
-const categories = ref([])
-const subcategories = ref([])
+const categories = ref<Category[]>([])
+const subcategories = ref<SubcategoryWithCategory[]>([])
 const { page, pageSize, paged } = usePagination(categories)
-const { selected, onSelectionChange } = useSelection()
+const { selected, onSelectionChange } = useSelection<Category>()
 const { persistMoved, savingOrder } = useDragOrder({
-  save: (id, sort_order) => categoryApi.update(id, { sort_order }),
+  save: (id, sort_order) => categoryApi.update(String(id), { sort_order }),
   reload: loadData,
 })
 // 表格行拖拽（页内下标 + 分页偏移换算到全量位置）
@@ -24,40 +25,50 @@ const { wrap: tableWrap, init: initRowSortable } = useTableSortable({
   persist: persistMoved,
 })
 const dialogVisible = ref(false)
-const formRef = ref()
-const defaultForm = () => ({ id: null, name: '', slug: '', icon: '', description: '', sort_order: '' })
-const form = reactive(defaultForm())
-const rules = {
+const formRef = ref<FormInstance>()
+
+interface CategoryFormState {
+  id: string | null
+  name: string
+  slug: string
+  icon: string
+  description: string
+  sort_order: string
+}
+
+const defaultForm = (): CategoryFormState => ({ id: null, name: '', slug: '', icon: '', description: '', sort_order: '' })
+const form = reactive<CategoryFormState>(defaultForm())
+const rules: FormRules<CategoryFormState> = {
   name: [{ required: true, message: '请输入分类名称', trigger: 'blur' }],
   slug: [{ required: true, message: '请输入标识', trigger: 'blur' }],
 }
 
 const subsCount = computed(() => {
-  const m = new Map()
+  const m = new Map<string, number>()
   for (const s of subcategories.value) m.set(s.category_id, (m.get(s.category_id) || 0) + 1)
   return m
 })
 
-async function loadData() {
+async function loadData(): Promise<void> {
   loading.value = true
   try {
     const [cats, subs] = await Promise.all([categoryApi.list(), subcategoryApi.list()])
     categories.value = cats
     subcategories.value = subs
   } catch (e) {
-    ElMessage.error(e.message || '加载失败')
+    ElMessage.error(e instanceof Error ? e.message : '加载失败')
   } finally {
     loading.value = false
   }
 }
-function openDialog(row) {
+function openDialog(row?: Category): void {
   Object.assign(form, defaultForm())
   if (row) Object.assign(form, row)
   dialogVisible.value = true
 }
-async function save() {
+async function save(): Promise<void> {
   try {
-    await formRef.value.validate()
+    await formRef.value?.validate()
   } catch {
     return
   }
@@ -65,8 +76,9 @@ async function save() {
   try {
     const { id, ...payload } = form
     if (id) {
-      if (!payload.sort_order) delete payload.sort_order
-      await categoryApi.update(id, payload)
+      const body: Partial<Category> = { ...payload }
+      if (!body.sort_order) delete body.sort_order
+      await categoryApi.update(id, body)
     } else {
       if (!payload.sort_order) payload.sort_order = appendOrderKey(categories.value)
       await categoryApi.create(payload)
@@ -75,24 +87,30 @@ async function save() {
     dialogVisible.value = false
     await loadData()
   } catch (e) {
-    ElMessage.error(e.message || '保存失败')
+    ElMessage.error(e instanceof Error ? e.message : '保存失败')
   } finally {
     saving.value = false
   }
 }
-async function handleDelete(row) {
-  if (subsCount.value.get(row.id)) return ElMessage.warning('该分类下存在子分类，请先删除子分类')
+async function handleDelete(row: Category): Promise<void> {
+  if (subsCount.value.get(row.id)) {
+    ElMessage.warning('该分类下存在子分类，请先删除子分类')
+    return
+  }
   await ElMessageBox.confirm(`确定删除分类「${row.name}」吗？`, '删除确认', { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' })
   try {
     await categoryApi.remove(row.id)
     ElMessage.success('已删除')
     await loadData()
   } catch (e) {
-    ElMessage.error(e.message || '删除失败')
+    ElMessage.error(e instanceof Error ? e.message : '删除失败')
   }
 }
-async function handleBatchDelete() {
-  if (selected.value.some(r => subsCount.value.get(r.id))) return ElMessage.warning('选中的分类中存在含有子分类的分类，请先处理其子分类')
+async function handleBatchDelete(): Promise<void> {
+  if (selected.value.some(r => subsCount.value.get(r.id))) {
+    ElMessage.warning('选中的分类中存在含有子分类的分类，请先处理其子分类')
+    return
+  }
   await ElMessageBox.confirm(`确定删除选中的 ${selected.value.length} 个分类吗？`, '批量删除', {
     confirmButtonText: '删除',
     cancelButtonText: '取消',
@@ -103,7 +121,7 @@ async function handleBatchDelete() {
     ElMessage.success('已批量删除')
     await loadData()
   } catch (e) {
-    ElMessage.error(e.message || '删除失败')
+    ElMessage.error(e instanceof Error ? e.message : '删除失败')
   }
 }
 onMounted(() => {
@@ -151,10 +169,10 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openDialog(row)">
+            <el-button link type="primary" @click="openDialog(row as Category)">
               编辑
             </el-button>
-            <el-button link type="danger" @click="handleDelete(row)">
+            <el-button link type="danger" @click="handleDelete(row as Category)">
               删除
             </el-button>
           </template>

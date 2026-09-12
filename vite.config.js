@@ -9,10 +9,21 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig({
   plugins: [
     vue(),
+    // vue / vue-router 走隐式导入：preset 覆盖全库用到的组合式 API，
+    // 构建时由插件注回真实 import，产物与手写完全一致。
+    // 注意 AutoImport 这里没有配 ElementPlusResolver：模板里的 el-* 标签和
+    // v-loading 等指令由下面的 Components 负责；script 里的 ElMessage 等
+    // 本仓约定全部手写（已全库核实无一遗漏），不再留隐式后门——漏写会被
+    // eslint no-undef 直接拦下。之前两边都配属于重复，实测 AutoImport 那份
+    // 从未触发过，这次删掉。
+    // 附带产物：auto-imports.d.ts（编辑器补全）、.eslintrc-auto-import.json
+    // （eslint.config.js 读它识别全局变量，两个文件都要提交）。
     AutoImport({
-      resolvers: [ElementPlusResolver()],
-      dts: false,
+      imports: ['vue', 'vue-router'],
+      dts: true,
+      eslintrc: { enabled: true },
     }),
+    // 模板里的 el-* 标签和 v-loading 等指令才需要自动引入，由 Components 负责。
     Components({
       resolvers: [ElementPlusResolver({ importStyle: 'sass' })],
       dts: false,

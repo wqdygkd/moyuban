@@ -1,7 +1,7 @@
 import { ElMessage } from 'element-plus'
 import { BASE_62_DIGITS, generateKeyBetween } from 'fractional-indexing'
 import Sortable from 'sortablejs'
-import { onBeforeUnmount, ref } from 'vue'
+import { appendOrderKey } from '@/utils/order'
 
 // 前后邻居键之间生成新 fractional 键；邻居键非法时退化为追加到末尾
 export function nextOrderKey(list, index) {
@@ -10,12 +10,7 @@ export function nextOrderKey(list, index) {
   try {
     return generateKeyBetween(previous, next, BASE_62_DIGITS)
   } catch {
-    const keys = list.map(item => item.sort_order).filter(Boolean).map(String)
-    let last
-    for (const key of keys) {
-      if (last === undefined || last < key) last = key
-    }
-    return generateKeyBetween(last, undefined, BASE_62_DIGITS)
+    return appendOrderKey(list)
   }
 }
 

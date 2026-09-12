@@ -1,10 +1,10 @@
 <script setup>
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { BASE_62_DIGITS, generateKeyBetween } from 'fractional-indexing'
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useDragOrder, useTableSortable } from '@/composables/use-drag-order'
 import { usePagination, useSelection } from '@/composables/use-pagination'
 import { categoryApi, subcategoryApi } from '@/services/api'
+import { appendOrderKey } from '@/utils/order'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -68,14 +68,7 @@ async function save() {
       if (!payload.sort_order) delete payload.sort_order
       await categoryApi.update(id, payload)
     } else {
-      if (!payload.sort_order) {
-        const keys = categories.value.map(c => c.sort_order).filter(Boolean).map(String)
-        let last
-        for (const key of keys) {
-          if (last === undefined || last < key) last = key
-        }
-        payload.sort_order = generateKeyBetween(last, undefined, BASE_62_DIGITS)
-      }
+      if (!payload.sort_order) payload.sort_order = appendOrderKey(categories.value)
       await categoryApi.create(payload)
     }
     ElMessage.success(id ? '更新成功' : '新增成功')

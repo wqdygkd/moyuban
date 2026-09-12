@@ -1,6 +1,5 @@
 <script setup>
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed } from 'vue'
 import { useAuthStore } from '@/store/auth'
 import { useTheme } from '@/utils/theme'
 

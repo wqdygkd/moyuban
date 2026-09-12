@@ -1,5 +1,5 @@
-import { BASE_62_DIGITS, generateKeyBetween } from 'fractional-indexing'
 import { assertSupabase, supabase } from '@/lib/supabase'
+import { appendOrderKey } from '@/utils/order'
 
 // 写操作前确认本地仍有 session，避免以游客(anon)身份发请求
 // （此时 PostgREST 会报极具误导性的 "GRANT ... TO anon"，切勿照做给 anon 开写权限）。
@@ -20,10 +20,10 @@ function friendlyWriteError(originalError, action = '保存') {
   return originalError
 }
 
-async function withSession(action, fn) {
+async function withSession(action, run) {
   await requireSession(action)
   try {
-    return await fn()
+    return await run()
   } catch (error) {
     throw friendlyWriteError(error, action)
   }
@@ -95,23 +95,11 @@ export const siteApi = {
     if (error) throw error
     return { data, total: count ?? 0 }
   },
-  async listFeatured() {
-    assertSupabase()
-    const { data, error } = await supabase.from('sites').select('*').eq('is_featured', true).order('sort_order', { ascending: true })
-    if (error) throw error
-    return data
-  },
-  // 同子分类下末尾的新 fractional 键（新增网址留空排序时调用，仅读同组键）
   async endKeyForSub(subcategoryId) {
     assertSupabase()
     const { data, error } = await supabase.from('sites').select('sort_order').eq('subcategory_id', subcategoryId)
     if (error) throw error
-    const keys = (data || []).map(r => r.sort_order).filter(Boolean).map(String)
-    let last
-    for (const key of keys) {
-      if (last === undefined || last < key) last = key
-    }
-    return generateKeyBetween(last, undefined, BASE_62_DIGITS)
+    return appendOrderKey(data || [], r => r.sort_order)
   },
   async incrementClick(id) {
     assertSupabase()
@@ -130,7 +118,7 @@ export const metaApi = {
 }
 
 // 前台首页专用瘦字段
-const SITE_HOME_FIELDS = 'id,subcategory_id,name,url,description,favicon_url,is_hot,is_new,is_featured,sort_order'
+const SITE_HOME_FIELDS = 'id,subcategory_id,name,url,description,favicon_url,is_hot,is_new,is_featured,sort_order,created_at'
 const CAT_HOME_FIELDS = 'id,name,slug,icon,sort_order'
 const SUB_HOME_FIELDS = 'id,category_id,name,slug,sort_order'
 
@@ -151,9 +139,4 @@ export async function fetchSites() {
   const { data, error } = await supabase.from('sites').select(SITE_HOME_FIELDS).eq('is_active', true).order('sort_order', { ascending: true })
   if (error) throw error
   return data
-}
-
-export async function fetchHomeData() {
-  const [categories, subcategories, sites] = await Promise.all([fetchCategories(), fetchSubcategories(), fetchSites()])
-  return { categories, subcategories, sites, featured: sites.filter(s => s.is_featured) }
 }

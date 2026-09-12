@@ -16,7 +16,6 @@ export function assertSupabase() {
   if (!supabase) throw new Error('Supabase 未配置')
 }
 
-// 表级清空复用（import / 清理共用）
 export async function clearTables(tables) {
   for (const table of tables) {
     const { error } = await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000')

@@ -1,4 +1,3 @@
-import { computed, reactive, ref } from 'vue'
 import { supabase } from '@/lib/supabase'
 
 const user = ref()

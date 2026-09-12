@@ -130,7 +130,8 @@ export async function importDump(dump, { clearFirst = false, onProgress = () => 
     onProgress('category', categoryIndex + 1, categories.length, `已导入分类：${category.name}`)
   }
 
-  const subsBySlug = new Map() // slug -> {id}
+  const subsBySlug = new Map() // slug -> {id}；跨分类重名 slug 只保留第一组（导出顺序），
+  // 后续同名组的网址并入第一组——按 slug 本来就无法区分归属，确定性合并优于静默覆盖到最后一组
   let lastSubKey
   for (const [categoryIndex, category] of categories.entries()) {
     const parentId = catIdMap.get(String(category.origId ?? categoryIndex))
@@ -139,7 +140,7 @@ export async function importDump(dump, { clearFirst = false, onProgress = () => 
       const { data, error } = await supabase.from('subcategories').insert({ category_id: parentId, name: subcategory.name, slug: subcategory.slug, sort_order: lastSubKey }).select('id').single()
       if (error)
         throw new Error(`导入子分类「${subcategory.name}」失败: ${error.message}`)
-      subsBySlug.set(subcategory.slug, { id: data.id, slug: subcategory.slug })
+      if (!subsBySlug.has(subcategory.slug)) subsBySlug.set(subcategory.slug, { id: data.id, slug: subcategory.slug })
     }
   }
 

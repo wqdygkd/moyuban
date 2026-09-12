@@ -1,8 +1,6 @@
 <script setup>
 import { Lock, Message } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { computed, reactive, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth'
 

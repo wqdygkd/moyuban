@@ -169,11 +169,12 @@ async function save() {
     else await siteApi.create(payload)
     ElMessage.success(id ? '更新成功' : '新增成功')
     dialogVisible.value = false
-    if (isCreate) {
-      page.value = 1
-      if (page.value === 1) await fetchPaged()
-    } else {
+    if (!isCreate) {
+      await fetchPaged() // 更新：留在本页刷新
+    } else if (page.value === 1) {
       await fetchPaged()
+    } else {
+      page.value = 1 // watcher 自动拉取第一页；不能再手动调一次，否则一次保存发两次请求
     }
   } catch (e) {
     ElMessage.error(e.message || '保存失败')
@@ -186,8 +187,10 @@ async function handleDelete(row) {
   try {
     await siteApi.remove(row.id)
     ElMessage.success('已删除')
-    await fetchPaged()
-    if (!sites.value.length && page.value > 1) page.value--
+    // 本页删空且不在第一页：回上一页（watcher 拉取），否则直接刷新本页
+    // （先判断再请求，避免“拉取一次 + 翻页又拉取一次”）
+    if (sites.value.length <= 1 && page.value > 1) page.value--
+    else await fetchPaged()
   } catch (e) {
     ElMessage.error(e.message || '删除失败')
   }
@@ -201,9 +204,10 @@ async function handleBatchDelete() {
   try {
     await siteApi.batchRemove(selected.value.map(r => r.id))
     ElMessage.success('已批量删除')
+    const emptied = selected.value.length >= sites.value.length
     selected.value = []
-    await fetchPaged()
-    if (!sites.value.length && page.value > 1) page.value--
+    if (emptied && page.value > 1) page.value-- // 本页删空，回上一页（watcher 拉取）
+    else await fetchPaged()
   } catch (e) {
     ElMessage.error(e.message || '删除失败')
   }

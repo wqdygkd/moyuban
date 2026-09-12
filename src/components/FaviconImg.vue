@@ -1,6 +1,4 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
-
 defineOptions({ name: 'FaviconImg' })
 const props = defineProps({
   candidates: { type: Array, default: () => [] },

@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/auth'
 const routes = [
   { path: '/', name: 'home', component: () => import('@/views/HomeView.vue') },
   { path: '/login', name: 'login', component: () => import('@/views/LoginView.vue'), meta: { guestOnly: true } },
+  { path: '/category/:id', name: 'category', component: () => import('@/views/CategoryView.vue') },
   {
     path: '/admin',
     name: 'admin',

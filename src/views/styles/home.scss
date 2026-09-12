@@ -475,17 +475,10 @@
   align-items: center;
   gap: var(--space-3);
 }
-.section-index {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: rgb(var(--color-primary) / 0.9);
-  background: var(--bg-primary-soft);
-  border: 1px solid rgb(var(--color-primary) / 0.14);
-  padding: 3px 7px;
-  border-radius: var(--radius-full);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
+/* 分区右上角“进入分类”：占据原来 section-meta 的位置 */
+.section-more {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .section-icon {
   display: flex;
@@ -510,21 +503,6 @@
   text-wrap: balance;
   color: rgb(var(--color-text));
 }
-.section-meta {
-  margin-left: auto;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--text-foot);
-  color: rgb(var(--color-text-muted));
-  font-variant-numeric: tabular-nums;
-  background: rgb(var(--color-bg-card-hover) / 0.7);
-  border: 1px solid rgb(var(--color-border) / 0.5);
-  padding: 4px 10px;
-  border-radius: var(--radius-full);
-}
-
 /* 子分类过滤 el-check-tag —— 胶囊标签 */
 .child-tabs {
   display: flex;

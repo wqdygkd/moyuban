@@ -1,5 +1,4 @@
 <script setup>
-import { computed } from 'vue'
 import FaviconImg from '@/components/FaviconImg.vue'
 import { siteApi } from '@/services/api'
 import { getFaviconCandidates } from '@/utils/favicon'
@@ -11,20 +10,24 @@ const props = defineProps({
 })
 const emit = defineEmits(['edit'])
 const faviconCandidates = computed(() => {
-  // 前台图标优先级：favicon_url（手动）> image_url > 自动嗅探，失败逐个降级
+  // 前台图标优先级：favicon_url（手动）> image_url > 自动嗅探，失败逐个降级；
+  // 用 Set 去重（原来是 list.includes 逐个扫描，O(n²)）
+  const seen = new Set()
   const list = []
-  const manual = props.site.favicon_url?.trim()
-  if (manual) list.push(manual)
-  const img = props.site.image_url?.trim()
-  if (img && !list.includes(img)) list.push(img)
-  for (const u of getFaviconCandidates({ url: props.site.url })) {
-    if (!list.includes(u)) list.push(u)
+  const push = (u) => {
+    if (u && !seen.has(u)) {
+      seen.add(u)
+      list.push(u)
+    }
   }
+  push(props.site.favicon_url?.trim())
+  push(props.site.image_url?.trim())
+  for (const u of getFaviconCandidates({ url: props.site.url })) push(u)
   return list
 })
 let clicked = false
 function handleClick() {
-  // ponytail: fire-and-forget 单次点击防抖，避免重复写
+  // 单次点击防抖，避免重复写
   if (clicked || !props.site.id) return
   if (typeof navigator !== 'undefined' && !navigator.onLine) return
   clicked = true
@@ -203,7 +206,6 @@ function onCardClick(e) {
   }
 }
 
-/* ---------- 编辑模式 ---------- */
 .site-card.is-editable {
   cursor: grab;
   border-style: dashed;

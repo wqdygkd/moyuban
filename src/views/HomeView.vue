@@ -1,7 +1,6 @@
 <script setup>
 import { ElMessage, ElMessageBox } from 'element-plus'
 import Sortable from 'sortablejs'
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import FaviconField from '@/components/FaviconField.vue'
 import SiteCard from '@/components/SiteCard.vue'
 import { useDragOrder } from '@/composables/use-drag-order'
@@ -11,12 +10,14 @@ import { readHomeCache, writeHomeCache } from '@/utils/cache'
 import { getFaviconCandidates } from '@/utils/favicon'
 
 const auth = useAuthStore()
+const router = useRouter()
 const loading = ref(true)
 const error = ref('')
 const categories = ref([])
 const subcategories = ref([])
 const sites = ref([])
-const featured = ref([])
+// 推荐是 is_featured 的派生视图（见 featuredSites），不另存一份状态，
+// 避免拖拽/编辑后两处数据互相过期（曾用 featured ref 手工同步）。
 const recMode = ref('hot')
 const activeSub = reactive({})
 const activeCat = ref(null)
@@ -37,7 +38,6 @@ function applyCache(c) {
   categories.value = c.categories || []
   subcategories.value = c.subcategories || []
   sites.value = c.sites || []
-  featured.value = c.featured || (c.sites || []).filter(s => s.is_featured)
   return true
 }
 const _cached = readHomeCache()
@@ -76,7 +76,6 @@ watch(() => auth.isLoggedIn, (v) => {
   if (!v) editMode.value = false
 })
 
-// ---------- 左侧菜单：左右双向联动 ----------
 const leftActive = ref('')
 const leftOpeneds = computed(() => {
   if (!leftActive.value) return []
@@ -104,7 +103,6 @@ function onMenuSelect(index) {
     const catId = index.slice(0, sep)
     const subId = index.slice(sep + 2)
     activeSub[catId] = subId
-    activeSub[String(catId)] = subId
     leftActive.value = index
     scrollToId(catId)
   }
@@ -113,67 +111,72 @@ watch(leftOpeneds, (ids) => {
   nextTick(() => ids.forEach(id => menuRef.value?.open?.(id)))
 })
 
-// ---------- 派生数据（Map 索引避免每行 filter） ----------
+// ---------- 派生数据（Map 索引避免每行 filter；键统一用 String(id)，
+// 调用方不再需要数字/字符串双写、双查） ----------
 const subsByCat = computed(() => {
   const m = new Map()
   for (const s of subcategories.value) {
-    const a = m.get(s.category_id)
+    const key = String(s.category_id)
+    const a = m.get(key)
     if (a) a.push(s)
-    else m.set(s.category_id, [s])
+    else m.set(key, [s])
   }
   return m
 })
 const sitesBySub = computed(() => {
   const m = new Map()
   for (const s of sites.value) {
-    const a = m.get(s.subcategory_id)
+    const key = String(s.subcategory_id)
+    const a = m.get(key)
     if (a) a.push(s)
-    else m.set(s.subcategory_id, [s])
+    else m.set(key, [s])
   }
   return m
 })
 const sitesByCat = computed(() => {
   const m = new Map()
   for (const cat of categories.value) {
-    const subs = subsByCat.value.get(cat.id) || []
+    const subs = subsByCat.value.get(String(cat.id)) || []
     const list = []
     for (const sub of subs) {
-      const arr = sitesBySub.value.get(sub.id)
+      const arr = sitesBySub.value.get(String(sub.id))
       if (arr) list.push(...arr)
     }
-    m.set(cat.id, list)
+    m.set(String(cat.id), list)
   }
   return m
 })
 // 推荐列表从主数组派生（保持与拖拽排序同步），热门/最新只是过滤视角
 const featuredSites = computed(() => sites.value.filter(s => s.is_featured))
 const featuredList = computed(() => {
-  if (recMode.value === 'new') return [...featuredSites.value].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+  // “最新”按创建时间倒序：时间戳只解析一次（decorate-sort-undecorate），
+  // 不在 comparator 里反复 new Date（原写法每次比较都解析两次）。
+  if (recMode.value === 'new') {
+    return featuredSites.value
+      .map(s => ({ s, t: Date.parse(s.created_at || '') || 0 }))
+      .sort((a, b) => b.t - a.t)
+      .map(({ s }) => s)
+  }
   const hot = featuredSites.value.filter(s => s.is_hot)
   return hot.length ? hot : featuredSites.value
 })
 function subsOf(id) {
-  return subsByCat.value.get(id) || []
+  return subsByCat.value.get(String(id)) || []
 }
 function sitesOf(id) {
-  const all = sitesByCat.value.get(id) || []
-  const fid = activeSub[id]
-  return fid ? (sitesBySub.value.get(String(fid)) || sitesBySub.value.get(fid) || []) : all
+  const key = String(id)
+  const fid = activeSub[key]
+  return fid ? (sitesBySub.value.get(fid) || []) : (sitesByCat.value.get(key) || [])
 }
 function activeSubOf(id) {
-  return activeSub[id] ? String(activeSub[id]) : null
+  return activeSub[String(id)] ?? null
 }
 function initDefaultSubs() {
   for (const cat of categories.value) {
     const key = String(cat.id)
-    if (activeSub[key] == null && activeSub[cat.id] == null) {
+    if (activeSub[key] == null) {
       const subs = subsOf(cat.id)
-      if (subs.length) {
-        const first = String(subs[0].id)
-        activeSub[key] = first
-        // 兼容数字键
-        if (cat.id !== key) activeSub[cat.id] = first
-      }
+      if (subs.length) activeSub[key] = String(subs[0].id)
     }
   }
 }
@@ -181,7 +184,6 @@ watch([categories, subcategories], () => {
   if (categories.value.length && subcategories.value.length) initDefaultSubs()
 }, { immediate: true })
 
-// ---------- 滚动 helpers ----------
 let scrollLockTimer = null
 let scrollLocked = false
 function lockScroll(ms = 700) {
@@ -200,21 +202,16 @@ function scrollTo(el, opts = { behavior: 'smooth', block: 'start' }) {
 function scrollToId(catId) {
   scrollTo(document.getElementById(`cat-${catId}`))
 }
-const toggleCatId = scrollToId
+function goCategory(catId) {
+  router.push({ name: 'category', params: { id: catId } })
+}
 function scrollToFeature() {
   scrollTo(document.querySelector('.category-anchor[data-scroll="feature"]'))
 }
 function toggleSub(cat, sub) {
-  const cur = String(activeSub[cat.id] ?? activeSub[String(cat.id)] ?? '')
+  const key = String(cat.id)
   const sid = String(sub.id)
-  const next = cur === sid ? null : sid
-  if (next) {
-    activeSub[cat.id] = next
-    activeSub[String(cat.id)] = next
-  } else {
-    activeSub[cat.id] = null
-    activeSub[String(cat.id)] = null
-  }
+  activeSub[key] = activeSub[key] === sid ? null : sid
   // 右侧点击只切筛选，不碰 leftActive，避免左侧菜单自动展开
 }
 function setRecMode(mode) {
@@ -268,8 +265,7 @@ async function loadData({ silent = false, force = false } = {}) {
       needSubs ? fetchSubcategories() : Promise.resolve(cached.subcategories),
       needSites ? fetchSites() : Promise.resolve(cached.sites),
     ])
-    const feat = (needSites || !hasCache ? ss : cached.sites ?? ss).filter(s => s.is_featured)
-    const next = { categories: cats, subcategories: subs, sites: ss, featured: feat, version: remote ?? v }
+    const next = { categories: cats, subcategories: subs, sites: ss, version: remote ?? v }
     applyCache(next)
     writeHomeCache(next)
   } catch (e) {
@@ -285,13 +281,11 @@ async function loadData({ silent = false, force = false } = {}) {
   }
 }
 
-// ---------- 编辑模式（登录后）：拖拽排序 + 卡片编辑 ----------
-
 // 把当前内存数据同步回首页缓存（写库后 DB 触发器会自增 app_meta 版本，
 // 其余端靠版本探测自动刷新；本端直接同步保证即时可见）
 function syncHomeCache() {
   const version = readHomeCache()?.version
-  writeHomeCache({ categories: categories.value, subcategories: subcategories.value, sites: sites.value, featured: featured.value, version })
+  writeHomeCache({ categories: categories.value, subcategories: subcategories.value, sites: sites.value, version })
 }
 
 // 左侧菜单拖拽排序：一级挂根 ul（读 DOM 顺序重排全量），二级各挂各的 inline ul（天然不出父级）
@@ -326,8 +320,7 @@ function destroyGridSortables() {
 }
 function gridListOf(catId) {
   if (catId === 'featured') return featuredList.value
-  const m = sitesByCat.value
-  return m.get(catId) ?? m.get(Number(catId)) ?? []
+  return sitesByCat.value.get(String(catId)) ?? []
 }
 function gridDragDisabled(cid) {
   // “最新”视角按创建时间排序，拖拽无意义，直接禁用该网格
@@ -338,7 +331,6 @@ function refreshSortableDisabled() {
     const cid = s.el.dataset.grid === 'featured' ? 'featured' : s.el.dataset.catId
     s.option('disabled', gridDragDisabled(cid))
   }
-  // 左侧菜单：仅编辑模式可拖
   for (const s of menuSortables) s.option('disabled', !editMode.value)
 }
 function onGridEnd(catId, evt) {
@@ -424,7 +416,6 @@ function initMenuSortables() {
   }
 }
 
-// --- 左侧菜单：分类 / 子分类编辑 ---
 const catDialogVisible = ref(false)
 const catSaving = ref(false)
 const catFormRef = ref()
@@ -492,7 +483,6 @@ async function saveSub() {
   })
 }
 
-// --- 编辑弹窗 ---
 const editDialogVisible = ref(false)
 const editSaving = ref(false)
 const editFormRef = ref()
@@ -583,10 +573,6 @@ async function saveEdit() {
     const updated = { ...sites.value.find(s => s.id === editForm.id), ...payload }
     const idx = sites.value.findIndex(s => s.id === editForm.id)
     if (idx >= 0) sites.value.splice(idx, 1, updated)
-    const fIdx = featured.value.findIndex(s => s.id === editForm.id)
-    if (payload.is_featured && fIdx < 0) featured.value.push(updated)
-    else if (!payload.is_featured && fIdx >= 0) featured.value.splice(fIdx, 1)
-    else if (fIdx >= 0) featured.value.splice(fIdx, 1, updated)
     syncHomeCache()
   } catch (e) {
     ElMessage.error(e.message || '保存失败')
@@ -612,8 +598,6 @@ async function handleEditDelete() {
     await siteApi.remove(editForm.id)
     const i = sites.value.findIndex(s => s.id === editForm.id)
     if (i >= 0) sites.value.splice(i, 1)
-    const f = featured.value.findIndex(s => s.id === editForm.id)
-    if (f >= 0) featured.value.splice(f, 1)
     syncHomeCache()
     editDialogVisible.value = false
     ElMessage.success('已删除')
@@ -628,15 +612,14 @@ async function handleEditDelete() {
 let activeIo = null
 let activeRaf = null
 let onScroll = null
-function getHeaderOffset() {
-  // 与 scroll-margin-top 保持一致：--ui-header-height(64) + --space-4(16) + 8 容差
-  return 88
-}
+// 滚动吸附偏移：与 scroll-margin-top 保持一致，
+// --ui-header-height(64) + --space-4(16) + 8 容差
+const HEADER_OFFSET_PX = 88
 function updateActive() {
   if (scrollLocked) return
   const anchors = document.querySelectorAll('.category-anchor')
   if (!anchors.length) return
-  const offset = getHeaderOffset()
+  const offset = HEADER_OFFSET_PX
   let best = null
   let bestTop = -Infinity
   for (const el of anchors) {
@@ -677,13 +660,14 @@ function setupActiveObserver() {
   window.addEventListener('scroll', onScroll, { passive: true })
   window.addEventListener('resize', onScroll, { passive: true })
   // IO 仅作补充触发（containment / 懒加载后重算），不依赖 entries
-  activeIo = new IntersectionObserver(() => updateActive(), { rootMargin: '-88px 0px -55% 0px', threshold: 0 })
+  activeIo = new IntersectionObserver(() => updateActive(), { rootMargin: `-${HEADER_OFFSET_PX}px 0px -55% 0px`, threshold: 0 })
   for (const el of anchors) activeIo.observe(el)
   updateActive()
 }
 
 onMounted(async () => {
-  if (readHomeCache()) {
+  // _cached 是 setup 顶部已读到的缓存，复用它避免二次读 localStorage
+  if (_cached) {
     await setupReveal()
     setupActiveObserver()
     loadData({ silent: true })
@@ -769,7 +753,7 @@ onBeforeUnmount(() => {
                     <div class="sub-title-hit" @click.stop="scrollToFeature">
                       <span class="sub-icon-box"><el-icon><Trophy /></el-icon></span>
                       <span>智能推荐</span>
-                      <span class="sub-count">{{ featured.length }}</span>
+                      <span class="sub-count">{{ featuredSites.length }}</span>
                     </div>
                   </template>
                   <el-menu-item index="feature-hot">
@@ -781,14 +765,14 @@ onBeforeUnmount(() => {
                 </el-sub-menu>
                 <el-sub-menu v-for="cat in categories" :key="cat.id" :index="String(cat.id)" :data-cat-id="cat.id" :class="{ 'is-nav-active': String(activeCat) === String(cat.id) }">
                   <template #title>
-                    <div class="sub-title-hit" @click.stop="editMode ? openCatDialog(cat) : toggleCatId(cat.id)">
+                    <div class="sub-title-hit" @click.stop="editMode ? openCatDialog(cat) : scrollToId(cat.id)">
                       <span v-if="editMode" class="menu-drag" title="拖拽排序">⠿</span>
                       <span class="sub-icon-box"><el-icon><component :is="cat.icon || 'Folder'" /></el-icon></span>
                       <span class="sub-name">{{ cat.name }}</span>
                       <span class="sub-count">{{ subsOf(cat.id).length }}</span>
                     </div>
                   </template>
-                  <el-menu-item v-for="sub in subsOf(cat.id)" :key="sub.id" :index="`${cat.id}::${sub.id}`" :class="{ 'is-active': String(activeSub[cat.id] ?? activeSub[String(cat.id)]) === String(sub.id) }">
+                  <el-menu-item v-for="sub in subsOf(cat.id)" :key="sub.id" :index="`${cat.id}::${sub.id}`" :class="{ 'is-active': activeSub[String(cat.id)] === String(sub.id) }">
                     {{ sub.name }}
                     <span v-if="editMode" class="menu-drag" title="拖拽排序">⠿</span>
                   </el-menu-item>
@@ -806,13 +790,11 @@ onBeforeUnmount(() => {
               <section class="category-section">
                 <div class="section-header">
                   <div class="section-title-wrap">
-                    <span class="section-index">00</span>
                     <span class="section-icon"><el-icon><Trophy /></el-icon></span>
                     <h2 class="section-title">
                       智能推荐
                     </h2>
                   </div>
-                  <span class="section-meta">{{ featuredList.length }} 个推荐</span>
                 </div>
                 <div class="child-tabs">
                   <el-check-tag :checked="recMode === 'hot'" @change="setRecMode('hot')">
@@ -843,20 +825,21 @@ onBeforeUnmount(() => {
               </section>
             </div>
 
-            <div v-for="(cat, ci) in categories" :key="cat.id" class="category-anchor">
+            <div v-for="cat in categories" :key="cat.id" class="category-anchor">
               <section :id="`cat-${cat.id}`" class="category-section">
                 <div class="section-header">
                   <div class="section-title-wrap">
-                    <span class="section-index">{{ String(ci + 1).padStart(2, '0') }}</span>
                     <span class="section-icon"><el-icon><component :is="cat.icon || 'Folder'" /></el-icon></span>
                     <h2 class="section-title">
                       {{ cat.name }}
                     </h2>
                   </div>
-                  <span class="section-meta">{{ sitesOf(cat.id).length }} 个网站</span>
+                  <el-button link type="primary" class="section-more" @click="goCategory(cat.id)">
+                    进入分类<el-icon><ArrowRight /></el-icon>
+                  </el-button>
                 </div>
                 <div class="child-tabs">
-                  <el-check-tag v-for="sub in subsOf(cat.id)" :key="sub.id" :checked="activeSubOf(cat.id) === sub.id" @change="toggleSub(cat, sub)">
+                  <el-check-tag v-for="sub in subsOf(cat.id)" :key="sub.id" :checked="activeSubOf(cat.id) === String(sub.id)" @change="toggleSub(cat, sub)">
                     {{ sub.name }}
                   </el-check-tag>
                 </div>

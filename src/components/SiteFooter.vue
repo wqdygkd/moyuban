@@ -14,9 +14,6 @@ const year = new Date().getFullYear()
           <p class="footer-desc">
             摸鱼办，上班摸鱼第一入口，集生活服务、实用工具、资源发现、AI领域、影音娱乐、设计灵感、站长工具、开发资源、探索发现于一体的高效摸鱼集合地。摸鱼不犯法，快乐每一天。
           </p>
-          <div class="footer-nav">
-            <a href="javascript:void(0)">关于本站</a>
-          </div>
           <p class="footer-disclaimer">
             本网站为网址导航平台，所展示的资源及链接均收集自互联网或用户投稿，仅供学习参考，不代表本站立场，亦不对其真实性、合法性、准确性作任何保证。
           </p>
@@ -44,7 +41,8 @@ const year = new Date().getFullYear()
 }
 
 .footer-info {
-  max-width: 760px;
+  flex: 1;
+  min-width: 0;
 }
 
 .footer-brand {
@@ -78,17 +76,6 @@ const year = new Date().getFullYear()
   font-size: var(--text-foot);
   line-height: 1.8;
   color: var(--text-sub);
-}
-
-.footer-nav {
-  display: flex;
-  gap: var(--space-4);
-  margin-bottom: var(--space-3);
-
-  a {
-    font-size: var(--text-foot);
-    color: var(--el-color-primary);
-  }
 }
 
 .footer-disclaimer {

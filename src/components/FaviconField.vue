@@ -3,11 +3,14 @@ import { copyText } from '@/utils/clipboard'
 import { getFaviconSource } from '@/utils/favicon'
 
 defineOptions({ name: 'FaviconField' })
-defineProps({
+const props = defineProps({
   candidates: { type: Array, default: () => [] },
   placeholder: { type: String, default: '留空自动按多源解析' },
 })
 const model = defineModel({ type: String, default: '' })
+// 来源标签只解析一次：模板里原来每个候选调 3 次 getFaviconSource
+const candidateMetas = computed(() => props.candidates.map(u => ({ url: u, source: getFaviconSource(u) })))
+
 function onImgError(e) {
   e.target.classList.add('is-broken')
 }
@@ -24,7 +27,7 @@ function onImgError(e) {
       :placeholder="placeholder"
     >
       <el-option label="自动（按顺序容灾）" value="" />
-      <el-option v-for="u in candidates" :key="u" :label="u" :value="u" />
+      <el-option v-for="c in candidateMetas" :key="c.url" :label="c.url" :value="c.url" />
     </el-select>
     <el-button :disabled="!model" title="复制 URL" @click="copyText(model)">
       <el-icon><DocumentCopy /></el-icon>
@@ -34,10 +37,10 @@ function onImgError(e) {
     <div class="favicon-preview__head">
       候选预览 — 点击选用，悬停查看来源
     </div>
-    <div v-if="candidates.length" class="candidate-grid">
+    <div v-if="candidateMetas.length" class="candidate-grid">
       <el-tooltip
-        v-for="u in candidates"
-        :key="u"
+        v-for="c in candidateMetas"
+        :key="c.url"
         placement="top"
         effect="light"
         :show-after="180"
@@ -46,24 +49,24 @@ function onImgError(e) {
       >
         <template #content>
           <div class="favicon-hover-content">
-            <img :src="u" alt="原图预览" class="favicon-hover-img" loading="lazy" @error="onImgError">
+            <img :src="c.url" alt="原图预览" class="favicon-hover-img" loading="lazy" @error="onImgError">
             <div class="favicon-hover-meta">
-              <span class="favicon-hover-src">{{ getFaviconSource(u) }}</span>
-              <span class="favicon-hover-url">{{ u }}</span>
+              <span class="favicon-hover-src">{{ c.source }}</span>
+              <span class="favicon-hover-url">{{ c.url }}</span>
             </div>
           </div>
         </template>
         <button
           type="button"
           class="candidate"
-          :class="{ 'is-selected': model === u }"
-          :title="`${getFaviconSource(u)} — ${u}`"
-          @click="model = u"
+          :class="{ 'is-selected': model === c.url }"
+          :title="`${c.source} — ${c.url}`"
+          @click="model = c.url"
         >
-          <img :src="u" class="candidate__img" loading="lazy" @error="onImgError">
-          <span class="candidate__src">{{ getFaviconSource(u) }}</span>
-          <span class="candidate__url" :title="u">{{ u }}</span>
-          <span class="candidate__copy" title="复制 URL" @click.stop="copyText(u)">
+          <img :src="c.url" class="candidate__img" loading="lazy" @error="onImgError">
+          <span class="candidate__src">{{ c.source }}</span>
+          <span class="candidate__url" :title="c.url">{{ c.url }}</span>
+          <span class="candidate__copy" title="复制 URL" @click.stop="copyText(c.url)">
             <el-icon><DocumentCopy /></el-icon>
           </span>
         </button>

@@ -1,7 +1,5 @@
 <script setup>
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
 import SiteFooter from '@/components/SiteFooter.vue'
 import SiteHeader from '@/components/SiteHeader.vue'
 

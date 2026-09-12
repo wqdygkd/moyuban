@@ -1,6 +1,5 @@
 <script setup>
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ref } from 'vue'
 import { assertSupabase, clearTables } from '@/lib/supabase'
 import { categoryApi } from '@/services/api'
 import { exportDump, importDump, summarizeDump } from '@/services/import-api'

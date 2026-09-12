@@ -30,5 +30,3 @@ export function clearHomeCache() {
     localStorage.removeItem(KEY_DATA)
   } catch {}
 }
-
-export const clearAllCache = clearHomeCache

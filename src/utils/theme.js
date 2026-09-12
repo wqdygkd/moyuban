@@ -1,5 +1,3 @@
-import { ref } from 'vue'
-
 const THEME_KEY = 'theme'
 const THEMES = ['douyin', 'xhs', 'kuaishou', 'shipinhao']
 const DEFAULT_THEME = 'douyin'

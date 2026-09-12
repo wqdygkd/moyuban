@@ -1,7 +1,5 @@
 <script setup>
 import { ElMessage } from 'element-plus'
-import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import { useTheme } from '@/utils/theme'
 

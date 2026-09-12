@@ -13,10 +13,10 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
     redirect: { name: 'admin-sites' },
     children: [
-      { path: 'sites', name: 'admin-sites', component: () => import('@/views/admin/SiteManageView.vue') },
-      { path: 'categories', name: 'admin-categories', component: () => import('@/views/admin/CategoryManageView.vue') },
-      { path: 'subcategories', name: 'admin-subcategories', component: () => import('@/views/admin/SubcategoryManageView.vue') },
-      { path: 'import', name: 'admin-import', component: () => import('@/views/admin/ImportView.vue') },
+      { path: 'sites', name: 'admin-sites', component: () => import('@/views/admin/SiteManageView.vue'), meta: { title: '网址管理' } },
+      { path: 'categories', name: 'admin-categories', component: () => import('@/views/admin/CategoryManageView.vue'), meta: { title: '分类管理' } },
+      { path: 'subcategories', name: 'admin-subcategories', component: () => import('@/views/admin/SubcategoryManageView.vue'), meta: { title: '子分类管理' } },
+      { path: 'import', name: 'admin-import', component: () => import('@/views/admin/ImportView.vue'), meta: { title: '数据导入' } },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },
@@ -37,8 +37,14 @@ export function setupRouterGuard(): void {
   router.beforeEach(async (to) => {
     const auth = useAuthStore()
     if (!auth.initialized) {
-      authInitState.promise ??= auth.init()
-      await authInitState.promise
+      try {
+        authInitState.promise ??= auth.init()
+        await authInitState.promise
+      } catch (error) {
+        // init 失败不缓存 rejected promise，否则后续导航永远复用这次失败
+        authInitState.promise = undefined
+        throw error
+      }
     }
     if (to.meta.requiresAuth && !auth.isLoggedIn)
       return { name: 'login', query: { redirect: to.fullPath } }

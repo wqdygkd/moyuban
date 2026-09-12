@@ -1,28 +1,9 @@
 <script setup lang="ts">
-import type { ThemeName } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import ThemeSwitcher from '@/components/ThemeSwitcher.vue'
 import { useAuthStore } from '@/store/auth'
-import { useTheme } from '@/utils/theme'
 
 const auth = useAuthStore()
-const theme = useTheme()
-const THEMES = theme.THEMES
-const currentTheme = computed(() => theme.current.value)
-
-const THEME_LABEL: Record<ThemeName, string> = {
-  douyin: '抖音',
-  xhs: '小红书',
-  kuaishou: '快手',
-  shipinhao: '视频号',
-}
-
-function themeLabel(t: ThemeName): string {
-  return THEME_LABEL[t] || t
-}
-
-function onThemeCommand(t: ThemeName): void {
-  theme.set(t)
-}
 
 const avatarText = computed(() => {
   const email = auth.user?.email || 'U'
@@ -54,23 +35,7 @@ async function handleLogout() {
       </router-link>
 
       <div class="header-right">
-        <el-dropdown trigger="click" @command="onThemeCommand">
-          <button class="theme-toggle" title="切换主题">
-            <span class="theme-dot" :class="`dot-${currentTheme}`" />
-            <span class="theme-toggle-label">{{ themeLabel(currentTheme) }}</span>
-            <el-icon class="theme-caret">
-              <ArrowDown />
-            </el-icon>
-          </button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item v-for="t in THEMES" :key="t" :command="t" class="theme-dropdown-item" :class="{ 'theme-active': t === currentTheme }">
-                <span class="theme-dot" :class="`dot-${t}`" />
-                {{ themeLabel(t) }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        <ThemeSwitcher />
 
         <div class="auth-area">
           <template v-if="auth.isLoggedIn">
@@ -159,35 +124,6 @@ async function handleLogout() {
   gap: var(--space-4);
   flex-shrink: 0;
   margin-left: auto;
-}
-
-.theme-toggle {
-  height: 34px;
-  padding: 0 var(--space-2) 0 var(--space-2);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-full);
-  background: var(--card-bg);
-  color: var(--text-sub);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 16px;
-  cursor: pointer;
-  transition: all 0.2s;
-
-  &:hover {
-    color: var(--el-color-primary);
-    border-color: var(--el-color-primary-light-8);
-    background: var(--el-color-primary-light-9);
-  }
-}
-
-.theme-toggle-label {
-  font-size: var(--text-foot);
-  font-weight: 500;
-}
-.theme-caret {
-  font-size: 12px;
 }
 
 .user-chip {

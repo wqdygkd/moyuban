@@ -1,11 +1,9 @@
 import type { HomeCacheData } from '@/types'
 
 const KEY_DATA = 'nav_home_cache_v3'
-const TTL_MS = 1000 * 60 * 60 * 24 // 24h 过期，过期仍可用作兜底但后台必刷新
 
-export interface HomeCache extends HomeCacheData {
+export type HomeCache = HomeCacheData & {
   _ts?: number
-  _expired?: boolean
 }
 
 function safeJsonParse(raw: string): HomeCache | undefined {
@@ -22,8 +20,7 @@ export function readHomeCache(): HomeCache | undefined {
     if (!raw) return undefined
     const data = safeJsonParse(raw)
     if (!data || !Array.isArray(data.categories)) return undefined
-    // 超期标记为过期（调用方可据此强制刷新），但仍返回数据以秒开
-    if (data._ts && Date.now() - data._ts > TTL_MS) data._expired = true
+    // _ts 仅用于诊断缓存新鲜度；过期数据仍返回以秒开，后台会对照 app_meta 版本强制刷新
     return data
   } catch {
     return undefined

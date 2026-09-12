@@ -43,8 +43,7 @@
 #### A. SQL Editor 粘贴（推荐）
 
 1. 进入 Supabase 项目 → 左侧 `SQL Editor` → `New query`。
-2. 打开本仓库 `supabase/schema.sql`，全选复制 → 粘贴到 SQL Editor → 点击 `Run`（或 `Ctrl+Enter`）。看到 `Success. No rows returned` 即成功（创建 3 张表 + RLS + RPC）。
-3. 同样方式，新建一个 Query，复制 `supabase/seed.sql` 全部内容 → `Run`（导入 12 个主分类 / 50+ 子分类 / 160+ 示例网址，执行约 5-10 秒）。
+2. 打开本仓库 `supabase/schema.sql`，全选复制 → 粘贴到 SQL Editor → 点击 `Run`（或 `Ctrl+Enter`）。看到 `Success. No rows returned` 即成功（创建 3 张表 + RLS + RPC）。项目不含种子数据，表结构建好后即可在管理后台添加分类和网址。
 
 #### B. Supabase CLI 推送（适合已安装 CLI 的开发者）
 
@@ -61,7 +60,7 @@ supabase login
 # 提示输入第 1 步设置的 Database Password
 supabase link --project-ref <project-ref>
 
-# 4. 推送（本项目 config.toml 已配置 schema.sql + seed.sql）
+# 4. 推送（本项目 config.toml 已配置 schema.sql）
 supabase db push
 # 提示确认时输入 y 回车
 ```
@@ -195,7 +194,7 @@ netlify deploy --prod
 
 ## 四、验证与后续管理
 
-1. **访问首页**：打开平台分配的域名，查看分类与网址卡片（来自 `seed.sql`）。
+1. **访问首页**：打开平台分配的域名，查看分类与网址卡片。
 2. **登录后台**：访问 `https://你的域名/login` → 使用 Supabase 章节创建的邮箱密码登录 → 自动跳转 `/admin`，开始增删改数据。
 3. **更新网站**：
    - Git 托管部署：本地或 GitHub 网页端修改后 `git push` 到 `main`，平台自动重新部署。
@@ -242,7 +241,6 @@ pnpm preview  # 预览构建产物
 ```txt
 ├─ supabase/
 │  ├─ schema.sql        # 表结构 + RLS + GRANT + RPC（SQL Editor 执行）
-│  ├─ seed.sql          # 全量示例数据（分类/子分类/网址，schema 之后执行）
 │  └─ config.toml       # Supabase CLI 本地配置
 ├─ vercel.json          # Vercel SPA 重写：/(.*) → /index.html
 ├─ netlify.toml         # Netlify 构建 + SPA 重定向：/* → /index.html 200

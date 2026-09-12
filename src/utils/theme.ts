@@ -1,8 +1,21 @@
 import type { ThemeName } from '@/types'
 
 const THEME_KEY = 'theme'
+// 主题单一事实来源。注意：index.html 里防闪烁的内联脚本硬编码了同一份
+// 主题列表（原生脚本无法 import TS），新增主题时必须同步修改。
 const THEMES: readonly ThemeName[] = ['douyin', 'xhs', 'kuaishou', 'shipinhao']
 const DEFAULT_THEME: ThemeName = 'douyin'
+
+const THEME_LABELS: Record<ThemeName, string> = {
+  douyin: '抖音',
+  xhs: '小红书',
+  kuaishou: '快手',
+  shipinhao: '视频号',
+}
+
+export function themeLabel(theme: ThemeName): string {
+  return THEME_LABELS[theme]
+}
 
 const current = ref<ThemeName>(DEFAULT_THEME)
 
@@ -30,7 +43,6 @@ function init(): ThemeName {
 }
 
 function set(theme: ThemeName): ThemeName {
-  if (!isThemeName(theme)) return current.value
   apply(theme)
   try {
     localStorage.setItem(THEME_KEY, theme)

@@ -2,7 +2,7 @@
 -- 摸鱼办 · Supabase 数据库初始化脚本 (schema.sql)
 -- 执行本文件以创建表结构、行级安全策略与表级权限。
 -- 需要先启用 Supabase Auth (email + password)。
--- 随后执行 seed-full.sql 导入全量种子数据（分类/子分类/网址）。
+-- 不含种子数据：分类/子分类/网址由管理员登录后台后添加。
 -- ============================================================
 
 -- ---------- 扩展 ----------
@@ -134,7 +134,7 @@ drop table if exists public.friend_links cascade;
 -- 点击计数 RPC（供前台访问链接时调用，无需更新整行权限）
 -- ------------------------------------------------------------
 create or replace function public.increment_click(row_id uuid)
-returns void language sql security definer as $$
+returns void language sql security definer set search_path = public as $$
   update public.sites set click_count = click_count + 1 where id = row_id;
 $$;
 

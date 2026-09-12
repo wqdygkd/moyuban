@@ -70,6 +70,21 @@ export function summarizeDump(dump: NavDump): DumpSummary {
   return { categoryCount: cats.length, subcategoryCount: subCount, siteCount }
 }
 
+// 解析并校验导入源 JSON：兼容 { categoryTree: { categories } } 与顶层 { categories }
+// 两种形状；畸形数据在此给出明确错误，而不是拖到导入中途才失败
+export function parseNavDump(raw: unknown): NavDump {
+  if (typeof raw !== 'object' || raw === null)
+    throw new Error('数据格式不正确：顶层必须是 JSON 对象')
+  const object = raw as Record<string, unknown>
+  const tree = (object.categoryTree ?? object) as Record<string, unknown> | undefined
+  const cats = tree?.categories
+  if (!Array.isArray(cats))
+    throw new Error('数据格式不正确：缺少 categories 数组')
+  if (cats.some(c => typeof c !== 'object' || c === null || typeof (c as { name?: unknown }).name !== 'string'))
+    throw new Error('数据格式不正确：categories 中存在缺少 name 字段的条目')
+  return { categoryTree: { categories: cats as RawDumpCategory[] } }
+}
+
 /**
  * 按导出时的 sort_order 排序（空键沉底；纯数字按数值比，其余按包定义的字典序）。
  * 导入时先排好序再生成新键，顺序即原展示序，且合库时不会与现存键冲突。

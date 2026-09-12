@@ -14,27 +14,15 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   edit: []
 }>()
-const faviconCandidates = computed(() => {
-  // 前台图标优先级：favicon_url（手动）> image_url > 自动嗅探，失败逐个降级；
-  // 用 Set 去重（原来是 list.includes 逐个扫描，O(n²)）
-  const seen = new Set<string>()
-  const list: string[] = []
-  const push = (u: string | null | undefined) => {
-    if (u && !seen.has(u)) {
-      seen.add(u)
-      list.push(u)
-    }
-  }
-  push(props.site.favicon_url?.trim())
-  push(props.site.image_url?.trim())
-  for (const u of getFaviconCandidates({ url: props.site.url })) push(u)
-  return list
-})
+const faviconCandidates = computed(() =>
+  // 前台图标优先级：favicon_url（手动）> image_url > 自动嗅探，失败逐个降级
+  getFaviconCandidates({ url: props.site.url }, [props.site.image_url]),
+)
 let clicked = false
 function handleClick() {
   // 单次点击防抖，避免重复写
   if (clicked || !props.site.id) return
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return
+  if (!navigator.onLine) return
   clicked = true
   siteApi.incrementClick(props.site.id).catch(() => {
     clicked = false

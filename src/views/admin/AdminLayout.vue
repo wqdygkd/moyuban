@@ -1,28 +1,13 @@
 <script setup lang="ts">
-import type { ThemeName } from '@/types'
 import { ElMessage } from 'element-plus'
+import ThemeSwitcher from '@/components/ThemeSwitcher.vue'
 import { useAuthStore } from '@/store/auth'
-import { useTheme } from '@/utils/theme'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
-const theme = useTheme()
-const THEME_LABEL: Record<ThemeName, string> = { douyin: '抖音', xhs: '小红书', kuaishou: '快手', shipinhao: '视频号' }
-const currentTheme = computed(() => theme.current.value)
-function onThemeCommand(t: ThemeName): void {
-  theme.set(t)
-}
 
-const pageTitle = computed(() => {
-  const map: Record<string, string> = {
-    'admin-sites': '网址管理',
-    'admin-categories': '分类管理',
-    'admin-subcategories': '子分类管理',
-    'admin-import': '数据导入',
-  }
-  return map[String(route.name)] || '管理后台'
-})
+const pageTitle = computed(() => (route.meta.title as string | undefined) || '管理后台')
 
 function goHome(): void {
   router.push('/')
@@ -76,22 +61,7 @@ async function handleLogout(): Promise<void> {
             {{ pageTitle }}
           </div>
           <div class="admin-header-right">
-            <el-dropdown trigger="click" @command="onThemeCommand">
-              <button class="theme-toggle" title="切换主题">
-                <span class="theme-dot" :class="`dot-${currentTheme}`" />
-                <span class="theme-toggle-label">{{ THEME_LABEL[currentTheme] || currentTheme }}</span>
-                <el-icon class="theme-caret">
-                  <ArrowDown />
-                </el-icon>
-              </button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item v-for="t in theme.THEMES" :key="t" :command="t" class="theme-dropdown-item" :class="{ 'theme-active': t === currentTheme }">
-                    <span class="theme-dot" :class="`dot-${t}`" />{{ THEME_LABEL[t] || t }}
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+            <ThemeSwitcher />
             <div class="admin-user">
               <span class="admin-email">{{ auth.user?.email }}</span>
               <el-button text @click="handleLogout">
@@ -240,32 +210,6 @@ async function handleLogout(): Promise<void> {
 .admin-email {
   font-size: var(--text-foot);
   color: var(--text-sub);
-}
-
-.theme-toggle {
-  height: 34px;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-full);
-  background: var(--card-bg);
-  color: var(--text-sub);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-  &:hover {
-    color: var(--el-color-primary);
-    border-color: var(--el-color-primary-light-8);
-    background: var(--el-color-primary-light-9);
-  }
-}
-.theme-toggle-label {
-  font-size: var(--text-foot);
-  font-weight: 500;
-}
-.theme-caret {
-  font-size: 12px;
 }
 
 .admin-main {

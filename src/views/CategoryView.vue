@@ -1,17 +1,12 @@
 <script setup lang="ts">
-import type { CategoryHome, SiteHome, SubcategoryHome } from '@/types'
+import type { SiteHome } from '@/types'
 import SiteCard from '@/components/SiteCard.vue'
-import { fetchCategories, fetchSites, fetchSubcategories } from '@/services/api'
-import { readHomeCache, writeHomeCache } from '@/utils/cache'
+import { useHomeData } from '@/composables/use-home-data'
 import { groupBy } from '@/utils/group'
 
 const route = useRoute()
 const router = useRouter()
-const loading = ref(true)
-const error = ref('')
-const categories = ref<CategoryHome[]>([])
-const subcategories = ref<SubcategoryHome[]>([])
-const sites = ref<SiteHome[]>([])
+const { loading, error, categories, subcategories, sites, hasCache, loadData } = useHomeData()
 
 const catId = computed(() => String(route.params.id ?? ''))
 const category = computed(() => categories.value.find(c => String(c.id) === catId.value))
@@ -22,35 +17,14 @@ function sitesOfSub(subId: string | number): SiteHome[] {
 }
 const totalSites = computed(() => subs.value.reduce((n, s) => n + sitesOfSub(s.id).length, 0))
 
-function applyCache(c: ReturnType<typeof readHomeCache>): boolean {
-  if (!c) return false
-  categories.value = c.categories || []
-  subcategories.value = c.subcategories || []
-  sites.value = c.sites || []
-  return true
-}
-async function loadData(): Promise<void> {
-  try {
-    const [cats, subs, ss] = await Promise.all([fetchCategories(), fetchSubcategories(), fetchSites()])
-    categories.value = cats
-    subcategories.value = subs
-    sites.value = ss
-    writeHomeCache({ categories: cats, subcategories: subs, sites: ss, version: readHomeCache()?.version })
-  } catch (e) {
-    if (!categories.value.length) error.value = e instanceof Error ? e.message : '加载失败，请检查 Supabase 配置'
-  } finally {
-    loading.value = false
-  }
-}
 function goBack() {
   if (window.history.length > 1) router.back()
   else router.push('/')
 }
 
 onMounted(() => {
-  // 首页缓存复用：秒开，挂载后再静默刷新
-  if (applyCache(readHomeCache())) loading.value = false
-  loadData()
+  // 与首页同一条加载链路：缓存秒开 + app_meta 版本差量刷新
+  loadData({ silent: hasCache })
 })
 // 同组件内切换分类（路由复用）：数据已全量加载，只需回到顶部
 watch(catId, () => window.scrollTo({ top: 0 }))
@@ -61,7 +35,7 @@ watch(catId, () => window.scrollTo({ top: 0 }))
     <div class="wrapper page-home-content">
       <el-skeleton v-if="loading" :rows="8" animated class="skeleton" />
       <el-empty v-else-if="error" :description="error">
-        <el-button type="primary" @click="loadData">
+        <el-button type="primary" @click="loadData()">
           重新加载
         </el-button>
       </el-empty>

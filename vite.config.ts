@@ -44,7 +44,8 @@ export default defineConfig({
         start_url: '/',
         icons: [
           { src: 'favicon-128x128.png', sizes: '128x128', type: 'image/png' },
-          { src: 'favicon.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+          // favicon.png 实际尺寸 1254x1254；无安全边距，只标 any 不标 maskable
+          { src: 'favicon.png', sizes: '1254x1254', type: 'image/png', purpose: 'any' },
         ],
       },
       workbox: {

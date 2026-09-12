@@ -5,10 +5,8 @@ import { ElMessage } from 'element-plus'
 import Sortable from 'sortablejs'
 import { appendOrderKey, nextKey } from '@/utils/order'
 
-type OrderRow = Orderable
-
 // 前后邻居键之间生成新 fractional 键；邻居键非法时退化为追加到末尾
-export function nextOrderKey<T extends OrderRow>(list: T[], index: number): string {
+export function nextOrderKey<T extends Orderable>(list: T[], index: number): string {
   const previous = index > 0 ? list[index - 1].sort_order || undefined : undefined
   const next = index < list.length - 1 ? list[index + 1].sort_order || undefined : undefined
   try {
@@ -26,7 +24,7 @@ export interface DragOrderOptions {
 // Sortable 落定后调用：list 已是拖拽后的新顺序，只 update 被移动的一条
 export function useDragOrder({ save, reload }: DragOrderOptions) {
   const savingOrder = ref(false)
-  async function persistMoved<T extends OrderRow>(list: T[], id: T['id']): Promise<void> {
+  async function persistMoved<T extends Orderable>(list: T[], id: T['id']): Promise<void> {
     const newIndex = list.findIndex(item => String(item.id) === String(id))
     if (newIndex === -1) return
     const newKey = nextOrderKey(list, newIndex)
@@ -46,7 +44,7 @@ export function useDragOrder({ save, reload }: DragOrderOptions) {
   return { persistMoved, savingOrder }
 }
 
-export interface TableSortableOptions<T extends OrderRow> {
+export interface TableSortableOptions<T extends Orderable> {
   rows: Ref<T[]>
   page: Ref<number>
   pageSize: Ref<number>
@@ -54,7 +52,7 @@ export interface TableSortableOptions<T extends OrderRow> {
 }
 
 // 表格行拖拽：Sortable 挂 el-table 的 tbody；页内下标 + 分页偏移换算到全量位置
-export function useTableSortable<T extends OrderRow>({ rows, page, pageSize, persist }: TableSortableOptions<T>) {
+export function useTableSortable<T extends Orderable>({ rows, page, pageSize, persist }: TableSortableOptions<T>) {
   const wrap = ref<HTMLElement>()
   let sortable: Sortable | undefined
   function init(): void {

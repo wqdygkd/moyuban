@@ -30,7 +30,7 @@
 - 一台 **2GB 内存以上**的服务器（推荐 2C2G 以上，另加 2GB swap 兜底）
 - Docker Engine 24+ 与 Docker Compose v2（`docker compose version` 能跑通即可）
 - 两个域名（可选但强烈建议）：如 `nav.example.com`（前端）与 `supabase.example.com`（Supabase）
-- 本项目两个文件：`supabase/schema.sql`（建表 + RLS + RPC）与 `supabase/seed.sql`（示例数据，可选）
+- 本项目一个文件：`supabase/schema.sql`（建表 + RLS + RPC，数据由你自己在后台维护，不含种子数据）
 
 ## 三、目录结构
 
@@ -66,19 +66,18 @@ docker compose version   # 确认 v2 可用
 
 ### 2. 上传部署目录
 
-把本目录（`deploy/selfhost/`）连同本仓库的 `supabase/schema.sql`、`supabase/seed.sql` 一起传到服务器，例如放到 `/opt/moyuban/`：
+把本目录（`deploy/selfhost/`）连同本仓库的 `supabase/schema.sql` 一起传到服务器，例如放到 `/opt/moyuban/`：
 
 ```
 /opt/moyuban/
 ├── selfhost/        # 即本目录
-├── schema.sql
-└── seed.sql
+└── schema.sql
 ```
 
 ```bash
 # 也可以在服务器上直接用 git 拉取仓库后拷贝
 scp -r deploy/selfhost user@server:/opt/moyuban/selfhost
-scp supabase/schema.sql supabase/seed.sql user@server:/opt/moyuban/
+scp supabase/schema.sql user@server:/opt/moyuban/
 ```
 
 ### 3. 生成密钥
@@ -128,15 +127,14 @@ curl "http://localhost:8000/rest/v1/" -H "apikey: $(grep '^ANON_KEY=' .env | cut
 
 ### 6. 导入摸鱼办数据库
 
-首次启动后（初始化脚本只在第一次建库时执行），导入本项目的表结构和示例数据：
+首次启动后（初始化脚本只在第一次建库时执行），导入本项目的表结构：
 
 ```bash
 cd /opt/moyuban
 docker exec -i supabase-db psql -U postgres -d postgres < schema.sql   # 建表 + RLS + RPC
-docker exec -i supabase-db psql -U postgres -d postgres < seed.sql     # 示例数据（可选）
 ```
 
-验证：Studio → Table Editor 应能看到 `categories` / `subcategories` / `sites` / `app_meta` 四张表且有数据。
+验证：Studio → Table Editor 应能看到 `categories` / `subcategories` / `sites` / `app_meta` 四张空表。分类和网址随后在第 8 节部署完前端、登录管理后台后添加。
 
 ### 7. 创建管理员账号
 

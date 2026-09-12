@@ -1,26 +1,38 @@
 <script setup lang="ts">
 import type { FormInstance, FormRules } from 'element-plus'
 import type { SortableEvent } from 'sortablejs'
-import type { AppVersion, Category, CategoryHome, SiteHome, SubcategoryHome } from '@/types'
-import type { HomeCache } from '@/utils/cache'
+import type { CategoryHome, SiteHome, SubcategoryHome } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import Sortable from 'sortablejs'
 import FaviconField from '@/components/FaviconField.vue'
 import SiteCard from '@/components/SiteCard.vue'
 import { useDragOrder } from '@/composables/use-drag-order'
-import { categoryApi, fetchCategories, fetchSites, fetchSubcategories, metaApi, siteApi, subcategoryApi } from '@/services/api'
+import { useHomeData } from '@/composables/use-home-data'
+import { categoryApi, siteApi, subcategoryApi } from '@/services/api'
 import { useAuthStore } from '@/store/auth'
-import { readHomeCache, writeHomeCache } from '@/utils/cache'
 import { getFaviconCandidates } from '@/utils/favicon'
 import { groupBy } from '@/utils/group'
 
 const auth = useAuthStore()
 const router = useRouter()
-const loading = ref(true)
-const error = ref('')
-const categories = ref<CategoryHome[]>([])
-const subcategories = ref<SubcategoryHome[]>([])
-const sites = ref<SiteHome[]>([])
+const {
+  loading,
+  error,
+  categories,
+  subcategories,
+  sites,
+  hasCache,
+  loadData,
+  syncHomeCache,
+} = useHomeData({
+  onSettled: async () => {
+    await setupReveal()
+    setupActiveObserver()
+    initGridSortables()
+    initMenuSortables()
+    refreshSortableDisabled()
+  },
+})
 // 推荐是 is_featured 的派生视图（见 featuredSites），不另存一份状态，
 // 避免拖拽/编辑后两处数据互相过期（曾用 featured ref 手工同步）。
 type RecMode = 'hot' | 'new'
@@ -30,26 +42,13 @@ const activeCat = ref<string | null>(null)
 const sideOpen = ref(false)
 const menuRef = ref<{ open?: (index: string) => void }>()
 
-const greeting = computed(() => {
+function greeting(): string {
   const h = new Date().getHours()
   if (h < 6) return '夜深了，摸鱼人也该睡了'
   if (h < 11) return '早上好，摸鱼人'
   if (h < 14) return '中午好，吃饱了才好摸鱼'
   if (h < 18) return '下午好，摸鱼人'
   return '晚上好，今天的班辛苦啦'
-})
-
-function applyCache(c: HomeCache | undefined): boolean {
-  if (!c) return false
-  categories.value = c.categories || []
-  subcategories.value = c.subcategories || []
-  sites.value = c.sites || []
-  return true
-}
-const _cached = readHomeCache()
-if (_cached) {
-  applyCache(_cached)
-  loading.value = false
 }
 
 type SearchEngine = 'site' | 'baidu' | 'bing' | 'google'
@@ -228,56 +227,6 @@ async function setupReveal(): Promise<void> {
   }
 }
 
-// 按表按需拉取：版本一致则跳过
-function isVersionEqual(a: AppVersion | null | undefined, b: AppVersion | null | undefined): boolean {
-  return !!a && !!b && a.cat === b.cat && a.sub === b.sub && a.site === b.site
-}
-async function loadData({ silent = false, force = false }: { silent?: boolean, force?: boolean } = {}): Promise<void> {
-  const cached = readHomeCache()
-  const hasCache = !!cached
-  if (!silent && !hasCache) loading.value = true
-  if (!silent) error.value = ''
-  try {
-    let remote: AppVersion | null = null
-    try {
-      remote = await metaApi.getVersion()
-    } catch (e) {
-      if (!hasCache) throw e
-      console.warn('[cache] 版本探测失败', e)
-    }
-    if (!force && isVersionEqual(remote, cached?.version)) return
-    const v = cached?.version
-    const needCats = force || !hasCache || !remote || !v || remote.cat !== v.cat
-    const needSubs = force || !hasCache || !remote || !v || remote.sub !== v.sub
-    const needSites = force || !hasCache || !remote || !v || remote.site !== v.site
-    const [cats, subs, ss] = await Promise.all([
-      needCats ? fetchCategories() : Promise.resolve(cached.categories),
-      needSubs ? fetchSubcategories() : Promise.resolve(cached.subcategories),
-      needSites ? fetchSites() : Promise.resolve(cached.sites),
-    ])
-    const next = { categories: cats, subcategories: subs, sites: ss, version: remote ?? v }
-    applyCache(next)
-    writeHomeCache(next)
-  } catch (e) {
-    if (!hasCache) error.value = e instanceof Error ? e.message : '加载失败，请检查 Supabase 配置'
-    else console.warn('[cache] 后台刷新失败', e)
-  } finally {
-    loading.value = false
-    await setupReveal()
-    setupActiveObserver()
-    initGridSortables()
-    initMenuSortables()
-    refreshSortableDisabled()
-  }
-}
-
-// 把当前内存数据同步回首页缓存（写库后 DB 触发器会自增 app_meta 版本，
-// 其余端靠版本探测自动刷新；本端直接同步保证即时可见）
-function syncHomeCache(): void {
-  const version = readHomeCache()?.version
-  writeHomeCache({ categories: categories.value, subcategories: subcategories.value, sites: sites.value, version })
-}
-
 // 左侧菜单拖拽排序：一级挂根 ul（读 DOM 顺序重排全量），二级各挂各的 inline ul（天然不出父级）
 // persist 与实例状态声明前置，供下方函数使用
 const { persistMoved: persistSiteMoved } = useDragOrder({
@@ -425,7 +374,7 @@ const catRules: FormRules<CatFormState> = {
   slug: [{ required: true, message: '请输入标识', trigger: 'blur' }],
 }
 function openCatDialog(cat: CategoryHome): void {
-  Object.assign(catForm, { id: cat.id, name: cat.name, slug: cat.slug || '', icon: cat.icon || '', description: (cat as Category).description || '' })
+  Object.assign(catForm, { id: cat.id, name: cat.name, slug: cat.slug || '', icon: cat.icon || '', description: cat.description || '' })
   catDialogVisible.value = true
 }
 // 分类 / 子分类弹窗共用保存流程：校验 → 写库 → 同步本地行 → 同步缓存 → 关窗
@@ -464,7 +413,7 @@ async function saveCat(): Promise<void> {
     formRef: catFormRef,
     saving: catSaving,
     form: catForm,
-    update: (id, payload) => categoryApi.update(id, payload as Partial<Category>),
+    update: (id, payload) => categoryApi.update(id, payload as Partial<{ name: string, slug: string, icon: string, description: string }>),
     rows: categories,
     close: () => (catDialogVisible.value = false),
   })
@@ -619,9 +568,8 @@ async function saveEdit(): Promise<void> {
       await loadData({ silent: true, force: true })
       return
     }
-    const current = sites.value.find(s => s.id === editForm.id)
     const idx = sites.value.findIndex(s => s.id === editForm.id)
-    if (idx >= 0 && current) sites.value.splice(idx, 1, { ...current, ...payload })
+    if (idx >= 0) sites.value.splice(idx, 1, { ...sites.value[idx], ...payload })
     syncHomeCache()
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : '保存失败')
@@ -717,8 +665,8 @@ function setupActiveObserver(): void {
 }
 
 onMounted(async () => {
-  // _cached 是 setup 顶部已读到的缓存，复用它避免二次读 localStorage
-  if (_cached) {
+  // 有缓存：先完成首屏渲染（入场/高亮），再静默校验版本
+  if (hasCache) {
     await setupReveal()
     setupActiveObserver()
     loadData({ silent: true })
@@ -759,7 +707,7 @@ onBeforeUnmount(() => {
       <div class="layout-search">
         <div v-if="!loading" class="hero-intro">
           <h1 class="hero-title">
-            {{ greeting }}
+            {{ greeting() }}
           </h1>
           <p class="hero-sub">
             已收录 <b>{{ sites.length }}</b> 个摸鱼入口 <i>·</i> 覆盖 <b>{{ categories.length }}</b> 个分类

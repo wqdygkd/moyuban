@@ -1,18 +1,15 @@
 <script setup lang="ts">
-import type { FormInstance, FormRules } from 'element-plus'
 import type { Category, SubcategoryWithCategory } from '@/types'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { useCrudTable } from '@/composables/use-crud-table'
 import { useDragOrder, useTableSortable } from '@/composables/use-drag-order'
-import { usePagination, useSelection } from '@/composables/use-pagination'
+import { usePagination } from '@/composables/use-pagination'
 import { categoryApi, subcategoryApi } from '@/services/api'
-import { appendOrderKey } from '@/utils/order'
+import { countBy } from '@/utils/group'
 
-const loading = ref(false)
-const saving = ref(false)
 const categories = ref<Category[]>([])
 const subcategories = ref<SubcategoryWithCategory[]>([])
 const { page, pageSize, paged } = usePagination(categories)
-const { selected, onSelectionChange } = useSelection<Category>()
 const { persistMoved, savingOrder } = useDragOrder({
   save: (id, sort_order) => categoryApi.update(String(id), { sort_order }),
   reload: loadData,
@@ -24,8 +21,9 @@ const { wrap: tableWrap, init: initRowSortable } = useTableSortable({
   pageSize,
   persist: persistMoved,
 })
-const dialogVisible = ref(false)
-const formRef = ref<FormInstance>()
+
+// 子分类数：删除前的占用检查 + 表格列展示
+const subsCount = computed(() => countBy(subcategories.value, s => s.category_id))
 
 interface CategoryFormState {
   id: string | null
@@ -36,17 +34,34 @@ interface CategoryFormState {
   sort_order: string
 }
 
-const defaultForm = (): CategoryFormState => ({ id: null, name: '', slug: '', icon: '', description: '', sort_order: '' })
-const form = reactive<CategoryFormState>(defaultForm())
-const rules: FormRules<CategoryFormState> = {
-  name: [{ required: true, message: '请输入分类名称', trigger: 'blur' }],
-  slug: [{ required: true, message: '请输入标识', trigger: 'blur' }],
-}
-
-const subsCount = computed(() => {
-  const m = new Map<string, number>()
-  for (const s of subcategories.value) m.set(s.category_id, (m.get(s.category_id) || 0) + 1)
-  return m
+const {
+  loading,
+  saving,
+  dialogVisible,
+  formRef,
+  form,
+  rules,
+  selected,
+  onSelectionChange,
+  openDialog,
+  save,
+  handleDelete,
+  handleBatchDelete,
+} = useCrudTable<CategoryFormState, Category>({
+  entityName: '分类',
+  usageName: '子分类',
+  usageCounts: subsCount,
+  rows: categories,
+  defaultForm: () => ({ id: null, name: '', slug: '', icon: '', description: '', sort_order: '' }),
+  rules: {
+    name: [{ required: true, message: '请输入分类名称', trigger: 'blur' }],
+    slug: [{ required: true, message: '请输入标识', trigger: 'blur' }],
+  },
+  create: payload => categoryApi.create(payload),
+  update: (id, payload) => categoryApi.update(id, payload),
+  remove: id => categoryApi.remove(id),
+  batchRemove: ids => categoryApi.batchRemove(ids),
+  reload: loadData,
 })
 
 async function loadData(): Promise<void> {
@@ -55,73 +70,10 @@ async function loadData(): Promise<void> {
     const [cats, subs] = await Promise.all([categoryApi.list(), subcategoryApi.list()])
     categories.value = cats
     subcategories.value = subs
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '加载失败')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '加载失败')
   } finally {
     loading.value = false
-  }
-}
-function openDialog(row?: Category): void {
-  Object.assign(form, defaultForm())
-  if (row) Object.assign(form, row)
-  dialogVisible.value = true
-}
-async function save(): Promise<void> {
-  try {
-    await formRef.value?.validate()
-  } catch {
-    return
-  }
-  saving.value = true
-  try {
-    const { id, ...payload } = form
-    if (id) {
-      const body: Partial<Category> = { ...payload }
-      if (!body.sort_order) delete body.sort_order
-      await categoryApi.update(id, body)
-    } else {
-      if (!payload.sort_order) payload.sort_order = appendOrderKey(categories.value)
-      await categoryApi.create(payload)
-    }
-    ElMessage.success(id ? '更新成功' : '新增成功')
-    dialogVisible.value = false
-    await loadData()
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '保存失败')
-  } finally {
-    saving.value = false
-  }
-}
-async function handleDelete(row: Category): Promise<void> {
-  if (subsCount.value.get(row.id)) {
-    ElMessage.warning('该分类下存在子分类，请先删除子分类')
-    return
-  }
-  await ElMessageBox.confirm(`确定删除分类「${row.name}」吗？`, '删除确认', { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' })
-  try {
-    await categoryApi.remove(row.id)
-    ElMessage.success('已删除')
-    await loadData()
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '删除失败')
-  }
-}
-async function handleBatchDelete(): Promise<void> {
-  if (selected.value.some(r => subsCount.value.get(r.id))) {
-    ElMessage.warning('选中的分类中存在含有子分类的分类，请先处理其子分类')
-    return
-  }
-  await ElMessageBox.confirm(`确定删除选中的 ${selected.value.length} 个分类吗？`, '批量删除', {
-    confirmButtonText: '删除',
-    cancelButtonText: '取消',
-    type: 'warning',
-  })
-  try {
-    await categoryApi.batchRemove(selected.value.map(r => r.id))
-    ElMessage.success('已批量删除')
-    await loadData()
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '删除失败')
   }
 }
 onMounted(() => {

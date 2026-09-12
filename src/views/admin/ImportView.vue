@@ -4,8 +4,9 @@ import type { DumpSummary, NavDump } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { clearTables } from '@/lib/supabase'
 import { categoryApi } from '@/services/api'
-import { exportDump, importDump, summarizeDump } from '@/services/import-api'
+import { exportDump, importDump, parseNavDump, summarizeDump } from '@/services/import-api'
 
+// url 模式实际兼容「拉取 URL」与「粘贴 JSON」两种输入
 type SourceMode = 'file' | 'url'
 interface LogEntry { type: 'info' | 'success' | 'error', msg: string }
 interface TreeNode { key: number, name: string, subs: string[] }
@@ -23,17 +24,27 @@ const logs = ref<LogEntry[]>([])
 const treeVisible = ref(false)
 const treeData = ref<TreeNode[]>([])
 
+function clearPreview(): void {
+  fileData.value = null
+  summary.value = { categoryCount: 0, subcategoryCount: 0, siteCount: 0 }
+  treeData.value = []
+}
+
+function acceptDump(json: NavDump): void {
+  fileData.value = json
+  summary.value = summarizeDump(json)
+  buildTree(json)
+  ElMessage.success(`解析成功：分类 ${summary.value.categoryCount}，子分类 ${summary.value.subcategoryCount}，网址 ${summary.value.siteCount}`)
+}
+
 function onFileChange(uploadFile: UploadFile): void {
   if (!uploadFile.raw) return
   const reader = new FileReader()
   reader.onload = (e) => {
     try {
-      const json = JSON.parse(e.target?.result as string) as NavDump
-      fileData.value = json
-      summary.value = summarizeDump(json)
-      buildTree(json)
-      ElMessage.success(`已解析文件：分类 ${summary.value.categoryCount}，网址 ${summary.value.siteCount}`)
+      acceptDump(parseNavDump(JSON.parse(e.target?.result as string)))
     } catch (err) {
+      clearPreview()
       ElMessage.error(`JSON 解析失败：${err instanceof Error ? err.message : String(err)}`)
     }
   }
@@ -52,15 +63,13 @@ async function parseByUrl(): Promise<void> {
     if (/^https?:\/\//i.test(v)) {
       const res = await fetch(v)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      json = await res.json() as NavDump
+      json = parseNavDump(await res.json())
     } else {
-      json = JSON.parse(v) as NavDump
+      json = parseNavDump(JSON.parse(v))
     }
-    fileData.value = json
-    summary.value = summarizeDump(json)
-    buildTree(json)
-    ElMessage.success(`解析成功：分类 ${summary.value.categoryCount}，网址 ${summary.value.siteCount}`)
+    acceptDump(json)
   } catch (err) {
+    clearPreview()
     ElMessage.error(`解析失败：${err instanceof Error ? err.message : String(err)}`)
   } finally {
     parsing.value = false
@@ -80,21 +89,32 @@ function previewTree(): void {
 }
 
 function reset(): void {
-  fileData.value = null
   urlInput.value = ''
   clearFirst.value = false
   logs.value = []
-  summary.value = { categoryCount: 0, subcategoryCount: 0, siteCount: 0 }
+  clearPreview()
+}
+
+// confirm 点取消会 reject：统一静默，避免 unhandled rejection
+async function confirmBox(message: string, title: string, confirmButtonText: string): Promise<boolean> {
+  try {
+    await ElMessageBox.confirm(message, title, { confirmButtonText, cancelButtonText: '取消', type: 'warning' })
+    return true
+  } catch {
+    return false
+  }
 }
 
 async function confirmImport(): Promise<void> {
   const dump = fileData.value
   if (!dump) return
-  await ElMessageBox.confirm(
+  if (!await confirmBox(
     `确定导入 ${summary.value.categoryCount} 个分类、${summary.value.subcategoryCount} 个子分类、${summary.value.siteCount} 个网址吗？`,
     '确认导入',
-    { confirmButtonText: '开始导入', cancelButtonText: '取消', type: 'warning' },
-  )
+    '开始导入',
+  )) {
+    return
+  }
   importing.value = true
   logs.value = []
   try {
@@ -109,9 +129,9 @@ async function confirmImport(): Promise<void> {
       msg: `✅ 导入成功：分类 ${result.categories}，子分类 ${result.subcategories}，网址 ${result.sites}，跳过 ${result.skipped}`,
     })
     ElMessage.success('导入完成')
-  } catch (e) {
-    logs.value.push({ type: 'error', msg: `导入失败：${e instanceof Error ? e.message : String(e)}` })
-    ElMessage.error(`导入失败：${e instanceof Error ? e.message : String(e)}`)
+  } catch (err) {
+    logs.value.push({ type: 'error', msg: `导入失败：${err instanceof Error ? err.message : String(err)}` })
+    ElMessage.error(`导入失败：${err instanceof Error ? err.message : String(err)}`)
   } finally {
     importing.value = false
   }
@@ -138,17 +158,13 @@ async function handleExport(): Promise<void> {
 }
 
 async function handleClearAll(): Promise<void> {
-  await ElMessageBox.confirm('确定清空数据库中的所有网址、子分类和分类吗？此操作不可恢复！', '数据清理', {
-    confirmButtonText: '全部清空',
-    cancelButtonText: '取消',
-    type: 'error',
-  })
+  if (!await confirmBox('确定清空数据库中的所有网址、子分类和分类吗？此操作不可恢复！', '数据清理', '全部清空')) return
   clearing.value = true
   try {
     await clearTables(['sites', 'subcategories', 'categories'])
     ElMessage.success('已清空全部数据')
-  } catch (e) {
-    ElMessage.error(`清理失败：${e instanceof Error ? e.message : String(e)}`)
+  } catch (err) {
+    ElMessage.error(`清理失败：${err instanceof Error ? err.message : String(err)}`)
   } finally {
     clearing.value = false
   }
@@ -186,7 +202,7 @@ async function handleClearAll(): Promise<void> {
           :auto-upload="false"
           :limit="1"
           :on-change="onFileChange"
-          :on-remove="() => (fileData = null)"
+          :on-remove="clearPreview"
           style="width: 100%"
         >
           <el-icon class="el-icon--upload">

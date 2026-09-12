@@ -60,7 +60,8 @@ export type AppVersion = {
 }
 
 // ---------- 前台瘦字段（fetchCategories/fetchSubcategories/fetchSites 返回） ----------
-export type CategoryHome = Pick<Category, 'id' | 'name' | 'slug' | 'icon' | 'sort_order'>
+// description 供前台"编辑站点/分类"弹窗回显，缺字段会导致弹窗描述恒为空
+export type CategoryHome = Pick<Category, 'id' | 'name' | 'slug' | 'icon' | 'description' | 'sort_order'>
 export type SubcategoryHome = Pick<Subcategory, 'id' | 'category_id' | 'name' | 'slug' | 'sort_order'>
 export type SiteHome = Pick<
   Site,
@@ -81,7 +82,7 @@ export type SubcategoryWithCategory = {
 
 // ---------- 通用 CRUD ----------
 export type CrudApi<TList, TRow = TList> = {
-  list: (select?: string) => Promise<TList[]>
+  list: () => Promise<TList[]>
   create: (payload: Partial<TRow>) => Promise<TRow>
   update: (id: string, payload: Partial<TRow>) => Promise<TRow>
   remove: (id: string) => Promise<void>

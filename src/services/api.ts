@@ -47,8 +47,8 @@ async function withSession<T>(action: string, run: () => Promise<T>): Promise<T>
 function createCrudApi<TList extends { id: string }, TRow extends { id: string } = TList>(table: 'categories' | 'subcategories' | 'sites'): CrudApi<TList, TRow> {
   const database = requireSupabase()
   return {
-    async list(select = '*'): Promise<TList[]> {
-      const { data, error } = await database.from(table).select(select).order('sort_order', { ascending: true })
+    async list(): Promise<TList[]> {
+      const { data, error } = await database.from(table).select().order('sort_order', { ascending: true })
       if (error) throw error
       return data as unknown as TList[]
     },
@@ -100,7 +100,8 @@ export const siteApi = {
     const database = requireSupabase()
     let query = database.from('sites').select('*', { count: 'exact' }).order('sort_order', { ascending: true })
     if (keyword) {
-      const k = `%${keyword.replaceAll(/[%\\]/g, '').trim()}%`
+      // % \ 是通配符需去掉；, ( ) 是 PostgREST or() 的语法字符，混入会破坏过滤串
+      const k = `%${keyword.replaceAll(/[%\\,()]/g, '').trim()}%`
       query = query.or(`name.ilike.${k},url.ilike.${k},description.ilike.${k}`)
     }
     if (subcategoryIds?.length) query = query.in('subcategory_id', subcategoryIds)
@@ -118,7 +119,9 @@ export const siteApi = {
   },
   async incrementClick(id: string): Promise<void> {
     const database = requireSupabase()
-    await database.rpc('increment_click', { row_id: id })
+    // 点击计数失败不影响跳转主流程，但不能静默：留 warn 便于发现 rpc 缺失/权限问题
+    const { error } = await database.rpc('increment_click', { row_id: id })
+    if (error) console.warn('[incrementClick]', error.message)
   },
 }
 
@@ -132,9 +135,10 @@ export const metaApi = {
   },
 }
 
-// 前台首页专用瘦字段
-const SITE_HOME_FIELDS = 'id,subcategory_id,name,url,description,favicon_url,is_hot,is_new,is_featured,sort_order,created_at'
-const CAT_HOME_FIELDS = 'id,name,slug,icon,sort_order'
+// 前台首页专用瘦字段（必须与 CategoryHome/SubcategoryHome/SiteHome 的 Pick 字段一致，
+// 缺字段会让编辑弹窗拿到 undefined 却被类型声明掩盖）
+const SITE_HOME_FIELDS = 'id,subcategory_id,name,url,description,favicon_url,image_url,keywords,is_active,is_hot,is_new,is_featured,sort_order,created_at'
+const CAT_HOME_FIELDS = 'id,name,slug,icon,description,sort_order'
 const SUB_HOME_FIELDS = 'id,category_id,name,slug,sort_order'
 
 export async function fetchCategories(): Promise<CategoryHome[]> {

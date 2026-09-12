@@ -55,6 +55,7 @@ declare module 'vue' {
     SiteCard: typeof import('./components/SiteCard.vue')['default']
     SiteFooter: typeof import('./components/SiteFooter.vue')['default']
     SiteHeader: typeof import('./components/SiteHeader.vue')['default']
+    ThemeSwitcher: typeof import('./components/ThemeSwitcher.vue')['default']
   }
   export interface GlobalDirectives {
     vLoading: typeof import('element-plus/es')['ElLoadingDirective']

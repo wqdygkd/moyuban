@@ -1,19 +1,16 @@
 <script setup lang="ts">
-import type { FormInstance, FormRules } from 'element-plus'
-import type { Category, Site, Subcategory, SubcategoryWithCategory } from '@/types'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import type { Category, Site, SubcategoryWithCategory } from '@/types'
+import { ElMessage } from 'element-plus'
+import { useCrudTable } from '@/composables/use-crud-table'
 import { useDragOrder, useTableSortable } from '@/composables/use-drag-order'
-import { usePagination, useSelection } from '@/composables/use-pagination'
+import { usePagination } from '@/composables/use-pagination'
 import { categoryApi, siteApi, subcategoryApi } from '@/services/api'
-import { appendOrderKey } from '@/utils/order'
+import { countBy } from '@/utils/group'
 
-const loading = ref(false)
-const saving = ref(false)
 const categories = ref<Category[]>([])
 const subcategories = ref<SubcategoryWithCategory[]>([])
 const sites = ref<Site[]>([])
 const { page, pageSize, paged } = usePagination(subcategories)
-const { selected, onSelectionChange } = useSelection<SubcategoryWithCategory>()
 const { persistMoved, savingOrder } = useDragOrder({
   save: (id, sort_order) => subcategoryApi.update(String(id), { sort_order }),
   reload: loadData,
@@ -25,8 +22,10 @@ const { wrap: tableWrap, init: initRowSortable } = useTableSortable({
   pageSize,
   persist: persistMoved,
 })
-const dialogVisible = ref(false)
-const formRef = ref<FormInstance>()
+
+const catMap = computed(() => new Map(categories.value.map(c => [c.id, c.name])))
+// 网址数：删除前的占用检查 + 表格列展示
+const siteCount = computed(() => countBy(sites.value, s => s.subcategory_id))
 
 interface SubcategoryFormState {
   id: string | null
@@ -36,18 +35,34 @@ interface SubcategoryFormState {
   sort_order: string
 }
 
-const defaultForm = (): SubcategoryFormState => ({ id: null, category_id: '', name: '', slug: '', sort_order: '' })
-const form = reactive<SubcategoryFormState>(defaultForm())
-const rules: FormRules<SubcategoryFormState> = {
-  category_id: [{ required: true, message: '请选择所属分类', trigger: 'change' }],
-  name: [{ required: true, message: '请输入子分类名称', trigger: 'blur' }],
-}
-
-const catMap = computed(() => new Map(categories.value.map(c => [c.id, c.name])))
-const siteCount = computed(() => {
-  const m = new Map<string, number>()
-  for (const s of sites.value) m.set(s.subcategory_id ?? '', (m.get(s.subcategory_id ?? '') || 0) + 1)
-  return m
+const {
+  loading,
+  saving,
+  dialogVisible,
+  formRef,
+  form,
+  rules,
+  selected,
+  onSelectionChange,
+  openDialog,
+  save,
+  handleDelete,
+  handleBatchDelete,
+} = useCrudTable<SubcategoryFormState, SubcategoryWithCategory>({
+  entityName: '子分类',
+  usageName: '网址',
+  usageCounts: siteCount,
+  rows: subcategories,
+  defaultForm: () => ({ id: null, category_id: '', name: '', slug: '', sort_order: '' }),
+  rules: {
+    category_id: [{ required: true, message: '请选择所属分类', trigger: 'change' }],
+    name: [{ required: true, message: '请输入子分类名称', trigger: 'blur' }],
+  },
+  create: payload => subcategoryApi.create(payload),
+  update: (id, payload) => subcategoryApi.update(id, payload),
+  remove: id => subcategoryApi.remove(id),
+  batchRemove: ids => subcategoryApi.batchRemove(ids),
+  reload: loadData,
 })
 
 async function loadData(): Promise<void> {
@@ -57,77 +72,10 @@ async function loadData(): Promise<void> {
     categories.value = cats
     subcategories.value = subs
     sites.value = siteData
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '加载失败')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '加载失败')
   } finally {
     loading.value = false
-  }
-}
-function openDialog(row?: Subcategory): void {
-  Object.assign(form, defaultForm())
-  if (row) Object.assign(form, row)
-  dialogVisible.value = true
-}
-async function save(): Promise<void> {
-  try {
-    await formRef.value?.validate()
-  } catch {
-    return
-  }
-  saving.value = true
-  try {
-    const { id, ...payload } = form
-    if (id) {
-      const body: Partial<Subcategory> = { ...payload }
-      if (!body.sort_order) delete body.sort_order
-      await subcategoryApi.update(id, body)
-    } else {
-      if (!payload.sort_order) payload.sort_order = appendOrderKey(subcategories.value)
-      await subcategoryApi.create(payload)
-    }
-    ElMessage.success(id ? '更新成功' : '新增成功')
-    dialogVisible.value = false
-    await loadData()
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '保存失败')
-  } finally {
-    saving.value = false
-  }
-}
-async function handleDelete(row: SubcategoryWithCategory): Promise<void> {
-  if (siteCount.value.get(row.id)) {
-    ElMessage.warning('该子分类下存在网址，请先删除或移动网址')
-    return
-  }
-  await ElMessageBox.confirm(`确定删除子分类「${row.name}」吗？`, '删除确认', {
-    confirmButtonText: '删除',
-    cancelButtonText: '取消',
-    type: 'warning',
-  })
-  try {
-    await subcategoryApi.remove(row.id)
-    ElMessage.success('已删除')
-    await loadData()
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '删除失败')
-  }
-}
-async function handleBatchDelete(): Promise<void> {
-  if (selected.value.some(r => siteCount.value.get(r.id))) {
-    ElMessage.warning('选中的子分类中存在含有网址的子分类，请先处理其网址')
-    return
-  }
-  await ElMessageBox.confirm(`确定删除选中的 ${selected.value.length} 个子分类吗？`, '批量删除', {
-    confirmButtonText: '删除',
-    cancelButtonText: '取消',
-    type: 'warning',
-  })
-  try {
-    await subcategoryApi.batchRemove(selected.value.map(r => r.id))
-    ElMessage.success('已批量删除')
-    await loadData()
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '删除失败')
   }
 }
 onMounted(() => {
@@ -180,7 +128,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openDialog(row as Subcategory)">
+            <el-button link type="primary" @click="openDialog(row as SubcategoryWithCategory)">
               编辑
             </el-button>
             <el-button link type="danger" @click="handleDelete(row as SubcategoryWithCategory)">

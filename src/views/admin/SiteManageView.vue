@@ -2,10 +2,12 @@
 import type { CascaderProps, FormInstance, FormRules } from 'element-plus'
 import type { Category, Site, SubcategoryWithCategory } from '@/types'
 import { Plus, Search } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import FaviconField from '@/components/FaviconField.vue'
 import FaviconImg from '@/components/FaviconImg.vue'
+import { useSelection } from '@/composables/use-pagination'
 import { categoryApi, siteApi, subcategoryApi } from '@/services/api'
+import { isDeleteConfirmed } from '@/utils/confirm'
 import { getFaviconCandidates } from '@/utils/favicon'
 
 const loading = ref(false)
@@ -18,11 +20,10 @@ const sites = ref<Site[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(10)
-const selected = ref<Site[]>([])
+const { selected, onSelectionChange } = useSelection<Site>()
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 const dialogVisible = ref(false)
 const formRef = ref<FormInstance>()
-const onSelectionChange = (rows: Site[]): Site[] => (selected.value = rows)
 
 interface SiteFormState {
   id: string | null
@@ -149,21 +150,16 @@ async function loadData(): Promise<void> {
 
 // 搜索/筛选防抖，避免每键一次请求；page/pageSize 变更直接拉取
 let searchTimer: ReturnType<typeof setTimeout> | null = null
+// 「变更后 page===1 则原地刷新，否则置 1」（page watcher 会自动拉取）
+function refetchOnFirstPage(): void {
+  if (page.value === 1) fetchPaged()
+  else page.value = 1
+}
 watch(keyword, () => {
   if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    if (page.value === 1) fetchPaged()
-    else page.value = 1
-  }, 200)
+  searchTimer = setTimeout(refetchOnFirstPage, 200)
 })
-watch(filterPath, () => {
-  if (page.value === 1) fetchPaged()
-  else page.value = 1
-})
-watch(pageSize, () => {
-  if (page.value === 1) fetchPaged()
-  else page.value = 1
-})
+watch([filterPath, pageSize], refetchOnFirstPage)
 watch(page, fetchPaged)
 onBeforeUnmount(() => {
   if (searchTimer) clearTimeout(searchTimer)
@@ -216,7 +212,7 @@ async function save(): Promise<void> {
   }
 }
 async function handleDelete(row: Site): Promise<void> {
-  await ElMessageBox.confirm(`确定删除「${row.name}」吗？`, '删除确认', { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' })
+  if (!await isDeleteConfirmed(`确定删除「${row.name}」吗？`)) return
   try {
     await siteApi.remove(row.id)
     ElMessage.success('已删除')
@@ -224,16 +220,12 @@ async function handleDelete(row: Site): Promise<void> {
     // （先判断再请求，避免“拉取一次 + 翻页又拉取一次”）
     if (sites.value.length <= 1 && page.value > 1) page.value--
     else await fetchPaged()
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '删除失败')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '删除失败')
   }
 }
 async function handleBatchDelete(): Promise<void> {
-  await ElMessageBox.confirm(`确定删除选中的 ${selected.value.length} 个网址吗？`, '批量删除', {
-    confirmButtonText: '删除',
-    cancelButtonText: '取消',
-    type: 'warning',
-  })
+  if (!await isDeleteConfirmed(`确定删除选中的 ${selected.value.length} 个网址吗？`, '批量删除')) return
   try {
     await siteApi.batchRemove(selected.value.map(r => r.id))
     ElMessage.success('已批量删除')
@@ -241,8 +233,8 @@ async function handleBatchDelete(): Promise<void> {
     selected.value = []
     if (emptied && page.value > 1) page.value-- // 本页删空，回上一页（watcher 拉取）
     else await fetchPaged()
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '删除失败')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '删除失败')
   }
 }
 onMounted(loadData)

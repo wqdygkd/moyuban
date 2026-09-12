@@ -60,9 +60,11 @@ declare global {
   const unref: typeof import('vue').unref
   const useAttrs: typeof import('vue').useAttrs
   const useAuthStore: typeof import('./store/auth').useAuthStore
+  const useCrudTable: typeof import('./composables/use-crud-table').useCrudTable
   const useCssModule: typeof import('vue').useCssModule
   const useCssVars: typeof import('vue').useCssVars
   const useDragOrder: typeof import('./composables/use-drag-order').useDragOrder
+  const useHomeData: typeof import('./composables/use-home-data').useHomeData
   const useId: typeof import('vue').useId
   const useLink: typeof import('vue-router').useLink
   const useModel: typeof import('vue').useModel
@@ -84,8 +86,14 @@ declare global {
   export type { Component, Slot, Slots, ComponentPublicInstance, ComputedRef, DirectiveBinding, ExtractDefaultPropTypes, ExtractPropTypes, ExtractPublicPropTypes, InjectionKey, PropType, Ref, ShallowRef, MaybeRef, MaybeRefOrGetter, VNode, WritableComputedRef } from 'vue'
   import('vue')
   // @ts-ignore
+  export type { CrudTableOptions } from './composables/use-crud-table'
+  import('./composables/use-crud-table')
+  // @ts-ignore
   export type { DragOrderOptions, TableSortableOptions } from './composables/use-drag-order'
   import('./composables/use-drag-order')
+  // @ts-ignore
+  export type { LoadDataOptions } from './composables/use-home-data'
+  import('./composables/use-home-data')
 }
 
 // for vue template auto import
@@ -145,9 +153,11 @@ declare module 'vue' {
     readonly unref: UnwrapRef<typeof import('vue')['unref']>
     readonly useAttrs: UnwrapRef<typeof import('vue')['useAttrs']>
     readonly useAuthStore: UnwrapRef<typeof import('./store/auth')['useAuthStore']>
+    readonly useCrudTable: UnwrapRef<typeof import('./composables/use-crud-table')['useCrudTable']>
     readonly useCssModule: UnwrapRef<typeof import('vue')['useCssModule']>
     readonly useCssVars: UnwrapRef<typeof import('vue')['useCssVars']>
     readonly useDragOrder: UnwrapRef<typeof import('./composables/use-drag-order')['useDragOrder']>
+    readonly useHomeData: UnwrapRef<typeof import('./composables/use-home-data')['useHomeData']>
     readonly useId: UnwrapRef<typeof import('vue')['useId']>
     readonly useLink: UnwrapRef<typeof import('vue-router')['useLink']>
     readonly useModel: UnwrapRef<typeof import('vue')['useModel']>

@@ -21,7 +21,7 @@ export interface FaviconTarget {
 }
 
 const faviconCache = new Map<string, string[]>()
-// 候选顺序：favicon_url（手动）> extra（调用方补充，如 image_url）> 自动嗅探，全部去重
+// 候选顺序：favicon_url（手动）> extra（调用方补充，如 image_url）> 第三方服务，全部去重
 export function getFaviconCandidates({ url, favicon_url }: FaviconTarget = {}, extra: Array<string | null | undefined> = []): string[] {
   const key = `${url}::${favicon_url}::${extra.join('|')}`
   const hit = faviconCache.get(key)
@@ -38,8 +38,6 @@ export function getFaviconCandidates({ url, favicon_url }: FaviconTarget = {}, e
   for (const u of extra) push(u?.trim())
   const host = getHost(url) || getHost(manual)
   if (host) {
-    push(`https://${host}/favicon.svg`)
-    push(`https://${host}/favicon.png`)
     push(`https://faviconsnap.com/api/favicon?url=${host}&size=128`)
     push(`https://icon.horse/icon/${host}?size=128`)
   }

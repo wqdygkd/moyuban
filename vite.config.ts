@@ -33,7 +33,7 @@ export default defineConfig({
     }),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.png', 'favicon-128x128.png'],
+      includeAssets: ['favicon.svg', 'favicon-128x128.png'],
       manifest: {
         name: '摸鱼办 - 上班摸鱼第一入口',
         short_name: '摸鱼办',
@@ -43,9 +43,9 @@ export default defineConfig({
         display: 'standalone',
         start_url: '/',
         icons: [
+          // 128 PNG 兜底不支持 SVG 图标的环境（iOS 主屏、旧版 WebView 等）
           { src: 'favicon-128x128.png', sizes: '128x128', type: 'image/png' },
-          // favicon.png 实际尺寸 1254x1254；无安全边距，只标 any 不标 maskable
-          { src: 'favicon.png', sizes: '1254x1254', type: 'image/png', purpose: 'any' },
+          { src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
         ],
       },
       workbox: {
@@ -61,14 +61,11 @@ export default defineConfig({
               networkTimeoutSeconds: 5,
             },
           },
-          // 图标缓存白名单，只收两类 URL：
-          // 1. 两个第三方 favicon 服务（带查询参数，无图片扩展名）；
-          // 2. 各站点自己域名下的 /favicon.svg|/favicon.png——候选链前两级直连图标，
-          //    域名不限但路径固定，本站同域 favicon 也走这里。
-          // 除此之外的外站图片（手填 image_url、第三方图床等）一律不做 PWA 缓存。
+          // 图标缓存白名单，只收两个第三方 favicon 服务（带查询参数，无图片扩展名）；
+          // 手填 favicon_url、image_url 等其他外站图片一律不做 PWA 缓存。
           // 跨域 <img> 是 no-cors opaque 响应（status 0），不放行就进不了缓存。
           {
-            urlPattern: /^https:\/\/(faviconsnap\.com|icon\.horse|[^/]+\/favicon\.(?:svg|png)).*/i,
+            urlPattern: /^https:\/\/(faviconsnap\.com|icon\.horse)\//i,
             handler: 'CacheFirst',
             options: {
               cacheName: 'favicons',

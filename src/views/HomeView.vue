@@ -212,10 +212,10 @@ function lockScroll(ms = 700): void {
     updateActive()
   }, ms)
 }
-function scrollTo(el: Element | null | undefined, opts: ScrollIntoViewOptions = { behavior: 'smooth', block: 'start' }): void {
+function scrollTo(el: Element | null | undefined): void {
   if (!el) return
   lockScroll()
-  el.scrollIntoView(opts)
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 function scrollToId(catId: string | number): void {
   scrollTo(document.getElementById(`cat-${catId}`))
@@ -366,7 +366,6 @@ function initMenuSortables(): void {
   menuSortables.push(Sortable.create(root as HTMLElement, {
     animation: 150,
     draggable: '.el-sub-menu[data-cat-id]',
-    handle: '.menu-drag',
     ghostClass: 'menu-ghost',
     disabled: true,
     onEnd: onMenuCatEnd,
@@ -377,8 +376,8 @@ function initMenuSortables(): void {
     const cid = (li as HTMLElement).dataset.catId
     menuSortables.push(Sortable.create(ul as HTMLElement, {
       animation: 150,
-      draggable: '.el-menu-item',
-      handle: '.menu-drag',
+      // 排除「新增子分类」占位项：它不是数据行，落点索引按真实子分类换算，混入会错位
+      draggable: '.el-menu-item:not(.menu-add-item)',
       ghostClass: 'menu-ghost',
       disabled: true,
       onEnd: evt => onMenuSubEnd(cid, evt),
@@ -397,12 +396,11 @@ function updateActive(): void {
   if (scrollLocked) return
   const anchors = document.querySelectorAll('.category-anchor')
   if (!anchors.length) return
-  const offset = HEADER_OFFSET_PX
   let best: Element | null = null
   let bestTop = -Infinity
   for (const el of anchors) {
     const top = el.getBoundingClientRect().top
-    if (top <= offset) {
+    if (top <= HEADER_OFFSET_PX) {
       if (top > bestTop) {
         bestTop = top
         best = el
@@ -411,7 +409,6 @@ function updateActive(): void {
   }
   // 顶部未越过 offset 时保持首个（feature）
   if (!best) best = anchors[0]
-  if (!best) return
   if ((best as HTMLElement).dataset.scroll === 'feature') {
     activeCat.value = null
   } else {
@@ -518,7 +515,7 @@ onBeforeUnmount(() => {
                 <span class="aside-kicker">INDEX / 目录</span>
                 <span class="aside-count">{{ categories.length }} 分类 · {{ sites.length }} 站点</span>
               </div>
-              <el-menu ref="menuRef" class="main-menu" unique-opened :default-active="leftActive" :default-openeds="leftOpeneds" @select="onMenuSelect">
+              <el-menu ref="menuRef" class="main-menu" :class="{ 'menu-editing': editMode }" unique-opened :default-active="leftActive" :default-openeds="leftOpeneds" @select="onMenuSelect">
                 <el-sub-menu index="feature" :class="{ 'is-nav-active': !activeCat }">
                   <template #title>
                     <div class="sub-title-hit" @click.stop="scrollToFeature">
@@ -537,7 +534,6 @@ onBeforeUnmount(() => {
                 <el-sub-menu v-for="cat in categories" :key="cat.id" :index="String(cat.id)" :data-cat-id="cat.id" :class="{ 'is-nav-active': String(activeCat) === String(cat.id) }">
                   <template #title>
                     <div class="sub-title-hit" @click.stop="editMode ? openCatDialog(cat) : scrollToId(cat.id)">
-                      <span v-if="editMode" class="menu-drag" title="拖拽排序">⠿</span>
                       <span class="sub-icon-box"><el-icon><component :is="cat.icon || 'Folder'" /></el-icon></span>
                       <span class="sub-name">{{ cat.name }}</span>
                       <span class="sub-count">{{ subsOf(cat.id).length }}</span>
@@ -545,7 +541,6 @@ onBeforeUnmount(() => {
                   </template>
                   <el-menu-item v-for="sub in subsOf(cat.id)" :key="sub.id" :index="`${cat.id}::${sub.id}`" :class="{ 'is-active': activeSub[String(cat.id)] === String(sub.id) }">
                     {{ sub.name }}
-                    <span v-if="editMode" class="menu-drag" title="拖拽排序">⠿</span>
                   </el-menu-item>
                   <el-menu-item v-if="editMode" :index="`newsub::${cat.id}`" class="menu-add-item">
                     <el-icon><Plus /></el-icon>

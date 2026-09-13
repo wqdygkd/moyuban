@@ -272,22 +272,12 @@
   display: none;
 }
 
-/* ---------- 左侧菜单：编辑模式拖拽手柄 ---------- */
-.main-menu.el-menu .el-sub-menu__title > .sub-title-hit:has(.menu-drag) {
-  gap: 6px;
-}
-.main-menu .menu-drag {
+/* ---------- 左侧菜单：编辑模式整行可拖拽（无手柄图标，光标是唯一提示，与卡片 is-editable 一致） ---------- */
+.main-menu.menu-editing .el-sub-menu[data-cat-id] > .el-sub-menu__title,
+.main-menu.menu-editing .el-sub-menu[data-cat-id] .el-menu-item:not(.menu-add-item) {
   cursor: grab;
-  color: var(--el-text-color-placeholder);
-  font-size: 12px;
-  line-height: 1;
-  user-select: none;
-  flex-shrink: 0;
   &:active {
     cursor: grabbing;
-  }
-  &:hover {
-    color: rgb(var(--color-primary));
   }
 }
 .sub-title-hit > .sub-name {

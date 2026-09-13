@@ -23,13 +23,18 @@
   box-shadow: var(--shadow-card);
 }
 
-/* ---------- 管理页工具栏 ---------- */
+/* ---------- 管理页工具栏（卡片容器；SiteManageView 窄屏横向滚动是其差异项） ---------- */
 .tb-toolbar {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 10px;
   flex-wrap: wrap;
   margin-bottom: var(--space-4);
+  background: var(--card-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  padding: 10px 12px;
+  box-shadow: var(--shadow-card);
 }
 .tb-toolbar--between {
   justify-content: space-between;
@@ -50,20 +55,77 @@
 .tb-right {
   margin-left: auto;
   display: flex;
+  align-items: center;
   gap: var(--space-2);
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--border-soft);
 }
 
-/* ---------- 表格容器 ---------- */
+/* ---------- 表格容器（管理页共用皮肤） ---------- */
 .table-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
   overflow: hidden;
-  padding: 2px var(--space-hair);
+  padding: 0;
 }
 .table-card .el-table {
   --el-table-header-bg-color: rgb(var(--color-bg-card-hover));
   --el-table-tr-bg-color: transparent;
-  --el-table-row-hover-bg-color: rgb(var(--color-bg-card-hover));
+  --el-table-row-hover-bg-color: rgb(var(--color-bg-card-hover) / 0.7);
   background: transparent;
   font-variant-numeric: tabular-nums;
+}
+/* 表头小号大写排版；行 hover 用半透明底色（!important 压过 EP 的行 hover 规则） */
+.table-card .el-table th.el-table__cell {
+  background: rgb(var(--color-bg-card-hover));
+  color: var(--text-sub);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-soft) !important;
+  padding: 10px 0;
+}
+.table-card .el-table td.el-table__cell {
+  padding: 11px 0;
+  border-bottom: 1px solid rgb(var(--color-border) / 0.5);
+  font-size: var(--text-sm);
+}
+.table-card .el-table .el-table__row:last-child td {
+  border-bottom: none;
+}
+.table-card .el-table .el-table__row:hover td {
+  background: rgb(var(--color-bg-card-hover) / 0.55) !important;
+}
+
+/* ---------- 表格分页条 / 拖拽手柄 ----------
+   .ui-page 前缀保持与原 scoped 选择器同级特异性：
+   EP 组件样式在 main.scss 之后入包，同级规则会让 EP 反超 */
+.ui-page .tb-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: 12px 14px;
+  border-top: 1px solid var(--border-soft);
+  background: rgb(var(--color-bg-card-hover) / 0.35);
+  margin-top: 0;
+}
+.ui-page .drag-handle {
+  cursor: move;
+  color: var(--el-text-color-placeholder);
+  font-size: 16px;
+  user-select: none;
+  padding: 4px 8px;
+  &:hover {
+    color: var(--el-color-primary);
+  }
+}
+.ui-page .sortable-ghost td {
+  background: var(--el-color-primary-light-9);
 }
 
 /* ---------- 小标签 ---------- */

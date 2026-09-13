@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { UploadFile } from 'element-plus'
 import type { DumpSummary, NavDump } from '@/types'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { clearTables } from '@/lib/supabase'
 import { categoryApi } from '@/services/api'
 import { exportDump, importDump, parseNavDump, summarizeDump } from '@/services/import-api'
+import { isConfirmed } from '@/utils/confirm'
 
 // url 模式实际兼容「拉取 URL」与「粘贴 JSON」两种输入
 type SourceMode = 'file' | 'url'
@@ -95,20 +96,10 @@ function reset(): void {
   clearPreview()
 }
 
-// confirm 点取消会 reject：统一静默，避免 unhandled rejection
-async function confirmBox(message: string, title: string, confirmButtonText: string): Promise<boolean> {
-  try {
-    await ElMessageBox.confirm(message, title, { confirmButtonText, cancelButtonText: '取消', type: 'warning' })
-    return true
-  } catch {
-    return false
-  }
-}
-
 async function confirmImport(): Promise<void> {
   const dump = fileData.value
   if (!dump) return
-  if (!await confirmBox(
+  if (!await isConfirmed(
     `确定导入 ${summary.value.categoryCount} 个分类、${summary.value.subcategoryCount} 个子分类、${summary.value.siteCount} 个网址吗？`,
     '确认导入',
     '开始导入',
@@ -158,7 +149,7 @@ async function handleExport(): Promise<void> {
 }
 
 async function handleClearAll(): Promise<void> {
-  if (!await confirmBox('确定清空数据库中的所有网址、子分类和分类吗？此操作不可恢复！', '数据清理', '全部清空')) return
+  if (!await isConfirmed('确定清空数据库中的所有网址、子分类和分类吗？此操作不可恢复！', '数据清理', '全部清空')) return
   clearing.value = true
   try {
     await clearTables(['sites', 'subcategories', 'categories'])
@@ -214,7 +205,7 @@ async function handleClearAll(): Promise<void> {
           </div>
         </el-upload>
         <p class="hint">
-          支持字段格式：{ categoryTree: { categories: [...] }, sites: [...] } 或 { categories: [...] }
+          支持字段格式：{ categoryTree: { categories: [...] } } 或顶层 { categories: [...] }；网址挂在各分类的 children 内
         </p>
       </div>
 

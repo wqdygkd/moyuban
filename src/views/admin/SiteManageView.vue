@@ -424,23 +424,16 @@ onMounted(loadData)
 .url-cell {
   color: var(--el-color-primary);
 }
+/* 本页工具栏项多：窄屏不换行、横向滚动（公共 .tb-toolbar 是换行的卡片） */
 .site-manage .tb-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   flex-wrap: nowrap;
   overflow-x: auto;
   scrollbar-width: none;
-  background: var(--card-bg);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-card);
-  padding: 10px 12px;
-  box-shadow: var(--shadow-card);
-  margin-bottom: var(--space-4);
 }
 .site-manage .tb-toolbar::-webkit-scrollbar {
   display: none;
 }
+/* 覆盖公共宽度（240/180）：本页筛选项多，给更窄的搜索框、更宽的级联并允许收缩 */
 .site-manage .tb-search {
   width: 200px;
   flex: 0 1 200px;
@@ -450,15 +443,6 @@ onMounted(loadData)
   width: 220px;
   flex: 0 1 220px;
   min-width: 180px;
-}
-.site-manage .tb-right {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  padding-left: 12px;
-  border-left: 1px solid var(--border-soft);
 }
 :deep(.tb-search .el-input__wrapper),
 :deep(.tb-cascader .el-input__wrapper) {
@@ -481,51 +465,6 @@ onMounted(loadData)
 :deep(.tb-search .el-input__inner),
 :deep(.tb-cascader .el-input__inner) {
   font-size: var(--text-sm);
-}
-.table-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
-  padding: 0;
-}
-.table-card :deep(.el-table) {
-  --el-table-header-bg-color: rgb(var(--color-bg-card-hover));
-  --el-table-tr-bg-color: transparent;
-  --el-table-row-hover-bg-color: rgb(var(--color-bg-card-hover) / 0.7);
-}
-.table-card :deep(.el-table th.el-table__cell) {
-  background: rgb(var(--color-bg-card-hover));
-  color: var(--text-sub);
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  border-bottom: 1px solid var(--border-soft) !important;
-  padding: 10px 0;
-}
-.table-card :deep(.el-table td.el-table__cell) {
-  padding: 11px 0;
-  border-bottom: 1px solid rgb(var(--color-border) / 0.5);
-  font-size: var(--text-sm);
-}
-.table-card :deep(.el-table .el-table__row:last-child td) {
-  border-bottom: none;
-}
-.table-card :deep(.el-table .el-table__row:hover td) {
-  background: rgb(var(--color-bg-card-hover) / 0.55) !important;
-}
-.tb-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  padding: 12px 14px;
-  border-top: 1px solid var(--border-soft);
-  background: rgb(var(--color-bg-card-hover) / 0.35);
-  margin-top: 0;
 }
 .tag-gap {
   margin-right: var(--space-1);

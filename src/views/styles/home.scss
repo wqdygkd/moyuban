@@ -547,22 +547,34 @@
   gap: var(--space-4);
 }
 
-/* ---------- 编辑模式 ---------- */
-.edit-toggle.el-button {
-  position: absolute;
-  top: var(--space-4);
-  right: var(--space-4);
-  z-index: 2;
+/* ---------- 右下角悬浮操作（编辑开关 / 回到顶部） ---------- */
+.fab-stack {
+  position: fixed;
+  right: var(--space-5);
+  bottom: var(--space-6);
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+.fab-btn.el-button {
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgb(var(--color-border));
   background: rgb(var(--color-bg-card));
-  border-color: rgb(var(--color-border));
   color: rgb(var(--color-text-secondary));
+  box-shadow: var(--shadow-pop);
+  transition: all 0.2s;
+  &:hover {
+    color: rgb(var(--color-primary));
+    border-color: rgb(var(--color-primary) / 0.4);
+    transform: translateY(-2px);
+  }
   &.el-button--primary {
     background: rgb(var(--color-primary));
     border-color: rgb(var(--color-primary));
     color: var(--text-on-primary);
-  }
-  .edit-toggle-icon {
-    margin-right: 4px;
   }
 }
 
@@ -704,6 +716,14 @@
   }
   .card-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+  .fab-stack {
+    right: var(--space-3);
+    bottom: var(--space-4);
+  }
+  .fab-btn.el-button {
+    width: 40px;
+    height: 40px;
   }
 }
 

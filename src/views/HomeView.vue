@@ -2,7 +2,7 @@
 import type { FormInstance, FormRules } from 'element-plus'
 import type { SortableEvent } from 'sortablejs'
 import type { CategoryHome, SiteHome, SubcategoryHome } from '@/types'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import Sortable from 'sortablejs'
 import FaviconField from '@/components/FaviconField.vue'
 import SiteCard from '@/components/SiteCard.vue'
@@ -11,6 +11,7 @@ import { useDragOrder } from '@/composables/use-drag-order'
 import { useHomeData } from '@/composables/use-home-data'
 import { categoryApi, siteApi, subcategoryApi } from '@/services/api'
 import { useAuthStore } from '@/store/auth'
+import { isDeleteConfirmed } from '@/utils/confirm'
 import { getFaviconCandidates } from '@/utils/favicon'
 import { groupBy } from '@/utils/group'
 
@@ -394,6 +395,41 @@ async function saveCat(): Promise<void> {
     close: () => (catDialogVisible.value = false),
   })
 }
+
+const catDeleting = ref(false)
+async function handleCatDelete(): Promise<void> {
+  if (!catForm.id) return
+  const key = String(catForm.id)
+  const cat = categories.value.find(c => String(c.id) === key)
+  const subs = subsByCat.value.get(key) || []
+  const siteCount = sitesByCat.value.get(key)?.length ?? 0
+  // 库里 subcategories/sites 对上级是 on delete cascade，删除分类会连子级一起没了，
+  // 确认文案必须把连带数量说清楚，避免误删整个板块
+  const detail = subs.length
+    ? `其下 ${subs.length} 个子分类、${siteCount} 个网址将一并删除，且不可恢复`
+    : '删除后不可恢复'
+  if (!await isDeleteConfirmed(`确定删除分类「${cat?.name || catForm.name}」吗？${detail}。`))
+    return
+  catDeleting.value = true
+  try {
+    await categoryApi.remove(key)
+    // 服务端已级联删除子分类和网址，本地同步清掉，否则缓存和站点计数会残留幽灵数据
+    const subIds = new Set(subs.map(s => String(s.id)))
+    sites.value.splice(0, sites.value.length, ...sites.value.filter(s => !s.subcategory_id || !subIds.has(String(s.subcategory_id))))
+    subcategories.value.splice(0, subcategories.value.length, ...subcategories.value.filter(s => !subIds.has(String(s.id))))
+    const ci = categories.value.findIndex(c => String(c.id) === key)
+    if (ci >= 0) categories.value.splice(ci, 1)
+    delete activeSub[key]
+    if (leftActive.value.startsWith(`${key}::`)) leftActive.value = ''
+    syncHomeCache()
+    catDialogVisible.value = false
+    ElMessage.success('已删除')
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '删除失败')
+  } finally {
+    catDeleting.value = false
+  }
+}
 const subDialogVisible = ref(false)
 const subSaving = ref(false)
 const subFormRef = ref<FormInstance>()
@@ -423,6 +459,35 @@ async function saveSub(): Promise<void> {
     rows: subcategories,
     close: () => (subDialogVisible.value = false),
   })
+}
+
+const subDeleting = ref(false)
+async function handleSubDelete(): Promise<void> {
+  if (!subForm.id) return
+  const key = String(subForm.id)
+  const sub = subcategories.value.find(s => String(s.id) === key)
+  const siteCount = sitesBySub.value.get(key)?.length ?? 0
+  const detail = siteCount ? `其下 ${siteCount} 个网址将一并删除，且不可恢复` : '删除后不可恢复'
+  if (!await isDeleteConfirmed(`确定删除子分类「${sub?.name || subForm.name}」吗？${detail}。`))
+    return
+  subDeleting.value = true
+  try {
+    await subcategoryApi.remove(key)
+    // 网址随外键级联删除，本地同步清掉再写缓存
+    sites.value.splice(0, sites.value.length, ...sites.value.filter(s => String(s.subcategory_id) !== key))
+    const si = subcategories.value.findIndex(s => String(s.id) === key)
+    if (si >= 0) subcategories.value.splice(si, 1)
+    const catKey = String(subForm.category_id)
+    if (activeSub[catKey] === key) activeSub[catKey] = null
+    if (leftActive.value === `${catKey}::${key}`) leftActive.value = ''
+    syncHomeCache()
+    subDialogVisible.value = false
+    ElMessage.success('已删除')
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '删除失败')
+  } finally {
+    subDeleting.value = false
+  }
 }
 
 const editDialogVisible = ref(false)
@@ -558,15 +623,8 @@ const editDeleting = ref(false)
 async function handleEditDelete(): Promise<void> {
   if (!editForm.id) return
   const target = sites.value.find(s => s.id === editForm.id)
-  try {
-    await ElMessageBox.confirm(`确定删除「${target?.name || editForm.name || ''}」吗？删除后不可恢复。`, '删除确认', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-  } catch {
+  if (!await isDeleteConfirmed(`确定删除「${target?.name || editForm.name || ''}」吗？删除后不可恢复。`))
     return
-  }
   editDeleting.value = true
   try {
     await siteApi.remove(editForm.id)
@@ -640,7 +698,18 @@ function setupActiveObserver(): void {
   updateActive()
 }
 
+// ---------- 右下角悬浮操作（编辑开关 + 回到顶部） ----------
+const showTop = ref(false)
+function updateShowTop(): void {
+  showTop.value = window.scrollY > 300
+}
+function scrollToTop(): void {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
 onMounted(async () => {
+  updateShowTop()
+  window.addEventListener('scroll', updateShowTop, { passive: true })
   // 有缓存：先完成首屏渲染（入场/高亮），再静默校验版本
   if (hasCache) {
     await setupReveal()
@@ -651,6 +720,7 @@ onMounted(async () => {
   await loadData()
 })
 onBeforeUnmount(() => {
+  window.removeEventListener('scroll', updateShowTop)
   destroyGridSortables()
   destroyMenuSortables()
   revealIo?.disconnect()
@@ -667,19 +737,6 @@ onBeforeUnmount(() => {
 <template>
   <div class="page-container page-home">
     <div class="page-home-top">
-      <el-button
-        v-if="auth.isLoggedIn && !loading"
-        class="edit-toggle"
-        :type="editMode ? 'primary' : 'default'"
-        round
-        @click="editMode = !editMode"
-      >
-        <el-icon class="edit-toggle-icon">
-          <EditPen v-if="!editMode" />
-          <Check v-else />
-        </el-icon>
-        {{ editMode ? '完成编辑' : '编辑模式' }}
-      </el-button>
       <div class="layout-search">
         <div v-if="!loading" class="hero-intro">
           <h1 class="hero-title">
@@ -837,6 +894,30 @@ onBeforeUnmount(() => {
       </div>
     </template>
 
+    <!-- 右下角悬浮操作：编辑开关（登录后可见）+ 回到顶部（滚过阈值后出现） -->
+    <div class="fab-stack">
+      <el-tooltip v-if="auth.isLoggedIn && !loading" :content="editMode ? '完成编辑' : '编辑模式'" placement="left">
+        <el-button
+          class="fab-btn"
+          :type="editMode ? 'primary' : 'default'"
+          circle
+          @click="editMode = !editMode"
+        >
+          <el-icon>
+            <EditPen v-if="!editMode" />
+            <Check v-else />
+          </el-icon>
+        </el-button>
+      </el-tooltip>
+      <transition name="el-fade-in-linear">
+        <el-tooltip v-if="showTop" content="回到顶部" placement="left">
+          <el-button class="fab-btn" circle @click="scrollToTop">
+            <el-icon><Top /></el-icon>
+          </el-button>
+        </el-tooltip>
+      </transition>
+    </div>
+
     <el-dialog v-model="editDialogVisible" title="编辑网址" width="520px" destroy-on-close>
       <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="90px">
         <el-form-item label="所属分类">
@@ -912,12 +993,19 @@ onBeforeUnmount(() => {
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="catDialogVisible = false">
-          取消
-        </el-button>
-        <el-button type="primary" :loading="catSaving" @click="saveCat">
-          保存
-        </el-button>
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <el-button type="danger" plain :loading="catDeleting" @click="handleCatDelete">
+            删除
+          </el-button>
+          <div>
+            <el-button @click="catDialogVisible = false">
+              取消
+            </el-button>
+            <el-button type="primary" :loading="catSaving" @click="saveCat">
+              保存
+            </el-button>
+          </div>
+        </div>
       </template>
     </el-dialog>
 
@@ -936,12 +1024,19 @@ onBeforeUnmount(() => {
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="subDialogVisible = false">
-          取消
-        </el-button>
-        <el-button type="primary" :loading="subSaving" @click="saveSub">
-          保存
-        </el-button>
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <el-button type="danger" plain :loading="subDeleting" @click="handleSubDelete">
+            删除
+          </el-button>
+          <div>
+            <el-button @click="subDialogVisible = false">
+              取消
+            </el-button>
+            <el-button type="primary" :loading="subSaving" @click="saveSub">
+              保存
+            </el-button>
+          </div>
+        </div>
       </template>
     </el-dialog>
   </div>

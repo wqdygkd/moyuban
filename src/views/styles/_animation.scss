@@ -1,0 +1,27 @@
+/* ---------- 卡片入场动画 ---------- */
+.category-section .site-card {
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.category-section.inview .site-card {
+  opacity: 1;
+  animation: card-rise 0.38s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 22ms);
+}
+@keyframes card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .category-section .site-card {
+    opacity: 1;
+    animation: none;
+    will-change: auto;
+  }
+}

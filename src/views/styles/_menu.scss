@@ -1,0 +1,304 @@
+/* ---------- 左侧菜单 ---------- */
+.aside {
+  flex-shrink: 0;
+  width: var(--ui-aside-width);
+}
+.aside-sticky {
+  position: sticky;
+  top: calc(var(--ui-header-height) + var(--space-4));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.aside-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 4px 2px;
+}
+.aside-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: rgb(var(--color-text-muted));
+  text-transform: uppercase;
+}
+.aside-count {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: rgb(var(--color-text-muted));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.aside .main-menu {
+  max-height: calc(100dvh - var(--ui-header-height) - var(--space-8) - 28px);
+  overflow: hidden auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--color-border) / 0.35) transparent;
+}
+.aside .main-menu::-webkit-scrollbar {
+  width: 4px;
+}
+.aside .main-menu::-webkit-scrollbar-thumb {
+  background: rgb(var(--color-border) / 0.45);
+  border-radius: 999px;
+}
+.aside .main-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 整体容器：更通透、更留白，缓解拥挤 */
+.main-menu.el-menu {
+  --el-menu-item-height: 32px;
+  --el-menu-sub-item-height: 30px;
+  --el-menu-base-level-padding: 14px;
+  --el-menu-level-padding: 14px;
+  --el-menu-hover-bg-color: rgb(var(--color-bg-card-hover));
+  --el-menu-active-color: rgb(var(--color-primary));
+  --el-menu-text-color: rgb(var(--color-text));
+  --el-menu-hover-text-color: rgb(var(--color-primary));
+  border-right: none;
+  background: rgb(var(--color-bg-card) / 0.92);
+  border: 1px solid rgb(var(--color-border) / 0.7);
+  border-radius: 16px;
+  padding: var(--space-3);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(10px) saturate(130%);
+}
+.main-menu.el-menu .el-sub-menu {
+  margin-bottom: 6px;
+}
+.main-menu.el-menu .el-sub-menu:last-child {
+  margin-bottom: 0;
+}
+
+/* ---------- 主分类（sub-menu 标题）——更松、带图标盒与计数 ---------- */
+.main-menu.el-menu .el-sub-menu__title {
+  position: relative;
+  height: auto;
+  min-height: 42px;
+  line-height: 1.4;
+  margin-bottom: 0;
+  padding: 8px 30px 8px 10px;
+  border-radius: 12px;
+  font-size: var(--text-md);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all 0.2s;
+  overflow: hidden;
+}
+.main-menu.el-menu .el-sub-menu__title > .sub-title-hit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  cursor: pointer;
+}
+.sub-icon-box {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: rgb(var(--color-bg-card-hover));
+  border: 1px solid rgb(var(--color-border) / 0.6);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.sub-icon-box .el-icon {
+  font-size: 15px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  color: rgb(var(--color-text-secondary));
+  transition: color 0.2s;
+  margin-right: 0;
+}
+.sub-count {
+  flex-shrink: 0;
+  min-width: 20px;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  background: rgb(var(--color-bg-card-hover));
+  border: 1px solid rgb(var(--color-border) / 0.5);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  color: rgb(var(--color-text-muted));
+  font-variant-numeric: tabular-nums;
+  transition: all 0.2s;
+}
+.main-menu.el-menu .el-sub-menu__title:hover {
+  background: rgb(var(--color-bg-card-hover));
+  color: rgb(var(--color-primary));
+}
+.main-menu.el-menu .el-sub-menu__title:hover .sub-icon-box {
+  border-color: rgb(var(--color-border-active) / 0.35);
+  background: var(--bg-primary-soft);
+}
+.main-menu.el-menu .el-sub-menu__title:hover .sub-icon-box .el-icon {
+  color: rgb(var(--color-primary));
+}
+.main-menu.el-menu .el-sub-menu__title:hover .sub-count {
+  color: rgb(var(--color-primary));
+  border-color: rgb(var(--color-primary) / 0.25);
+}
+/* 滚动高亮：主状态（强） */
+.main-menu.el-menu .el-sub-menu.is-nav-active > .el-sub-menu__title,
+.main-menu.el-menu .el-sub-menu.is-nav-active > .el-sub-menu__title:hover {
+  background: var(--bg-primary-active);
+  color: rgb(var(--color-primary));
+}
+.main-menu.el-menu .el-sub-menu.is-nav-active > .el-sub-menu__title .sub-icon-box {
+  background: rgb(var(--color-primary));
+  border-color: rgb(var(--color-primary));
+}
+.main-menu.el-menu .el-sub-menu.is-nav-active > .el-sub-menu__title .sub-icon-box .el-icon {
+  color: var(--text-on-primary);
+}
+.main-menu.el-menu .el-sub-menu.is-nav-active > .el-sub-menu__title .sub-count {
+  background: rgb(var(--color-primary));
+  color: var(--text-on-primary);
+  border-color: rgb(var(--color-primary));
+}
+/* 过滤态父级不跟随高亮，仅保留滚动主态；子项高亮见下方 .el-menu-item.is-active */
+/* 激活态左侧 3px 指示条 */
+.main-menu.el-menu .el-sub-menu.is-nav-active > .el-sub-menu__title::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 999px;
+  background: rgb(var(--color-primary));
+}
+
+/* 展开箭头 */
+.main-menu.el-menu .el-sub-menu__title .el-sub-menu__icon-arrow {
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  margin-top: -10px;
+  font-size: var(--text-md);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgb(var(--color-text-muted));
+  transform: rotate(-90deg);
+  transition:
+    transform 0.22s cubic-bezier(0.22, 0.61, 0.36, 1),
+    background-color 0.2s,
+    color 0.2s;
+}
+.main-menu.el-menu .el-sub-menu__title:hover .el-sub-menu__icon-arrow,
+.main-menu.el-menu .el-sub-menu.is-nav-active > .el-sub-menu__title .el-sub-menu__icon-arrow {
+  color: rgb(var(--color-primary));
+}
+.main-menu.el-menu .el-sub-menu__title:hover .el-sub-menu__icon-arrow {
+  background: rgb(var(--color-bg-card-hover));
+}
+.main-menu.el-menu .el-sub-menu.is-opened > .el-sub-menu__title .el-sub-menu__icon-arrow {
+  transform: rotate(90deg);
+  background: rgb(var(--color-bg-card-hover));
+}
+
+/* ---------- 子分类（menu-item）——与主菜单文字对齐 ---------- */
+.main-menu.el-menu .el-menu-item {
+  height: 30px;
+  padding-left: 48px !important;
+  margin: 2px 0;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: rgb(var(--color-text-secondary));
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.main-menu.el-menu .el-menu-item:hover {
+  color: rgb(var(--color-primary));
+  background: var(--bg-primary-soft);
+  transform: translateX(2px);
+}
+.main-menu.el-menu .el-menu-item.is-active,
+.main-menu.el-menu .el-menu-item.is-active:hover {
+  color: rgb(var(--color-primary));
+  background: var(--bg-primary-active);
+  font-weight: 600;
+  transform: none;
+}
+/* 编辑模式：菜单尾部「新增分类 / 新增子分类」入口——动作项而非导航项，
+   需压掉点选后 el-menu 挂上的 is-active 高亮，避免看起来像切了目录 */
+.main-menu.el-menu .el-menu-item.menu-add-item {
+  color: rgb(var(--color-text-muted));
+  &:hover {
+    color: rgb(var(--color-primary));
+    background: var(--bg-primary-soft);
+  }
+  .el-icon {
+    font-size: 13px;
+  }
+  &.is-active,
+  &.is-active:hover {
+    color: rgb(var(--color-text-muted));
+    background: transparent;
+    font-weight: 500;
+    transform: none;
+  }
+}
+.main-menu.el-menu .el-menu-item.menu-add-root {
+  padding-left: 14px !important;
+  margin-top: 4px;
+  border-top: 1px dashed rgb(var(--color-border) / 0.7);
+  border-radius: 0 0 10px 10px;
+}
+
+.menu-toggle.el-button {
+  display: none;
+}
+.menu-backdrop {
+  display: none;
+}
+
+/* ---------- 左侧菜单：编辑模式拖拽手柄 ---------- */
+.main-menu.el-menu .el-sub-menu__title > .sub-title-hit:has(.menu-drag) {
+  gap: 6px;
+}
+.main-menu .menu-drag {
+  cursor: grab;
+  color: var(--el-text-color-placeholder);
+  font-size: 12px;
+  line-height: 1;
+  user-select: none;
+  flex-shrink: 0;
+  &:active {
+    cursor: grabbing;
+  }
+  &:hover {
+    color: rgb(var(--color-primary));
+  }
+}
+.sub-title-hit > .sub-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.main-menu .menu-ghost {
+  opacity: 0.45;
+  background: rgb(var(--color-primary) / 0.08);
+  border-radius: 8px;
+}

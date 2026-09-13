@@ -1,0 +1,33 @@
+/* ---------- 骨架/空态 ---------- */
+.skeleton {
+  width: 100%;
+  max-width: var(--ui-container);
+  margin: 0 auto;
+  padding: 0 var(--space-5) var(--space-8);
+}
+
+/* ---------- 主体布局 ---------- */
+.wrapper.page-home-content {
+  width: 100%;
+  max-width: var(--ui-container);
+  margin: 0 auto;
+  padding: 0 var(--space-5) var(--space-8);
+}
+.page-main {
+  display: flex;
+  gap: var(--space-7);
+  position: relative;
+}
+/* 桌面端细分隔线，缓解拥挤、增加秩序感 */
+@media (min-width: 861px) {
+  .page-main::before {
+    content: '';
+    position: absolute;
+    left: calc(var(--ui-aside-width) + var(--space-7) / 2);
+    top: 0;
+    bottom: 24px;
+    width: 1px;
+    background: linear-gradient(to bottom, transparent, rgb(var(--color-border) / 0.55), transparent);
+    pointer-events: none;
+  }
+}

@@ -65,6 +65,7 @@ declare global {
   const useCssVars: typeof import('vue').useCssVars
   const useDragOrder: typeof import('./composables/use-drag-order').useDragOrder
   const useHomeData: typeof import('./composables/use-home-data').useHomeData
+  const useHomeEdit: typeof import('./composables/use-home-edit').useHomeEdit
   const useId: typeof import('vue').useId
   const useLink: typeof import('vue-router').useLink
   const useModel: typeof import('vue').useModel
@@ -95,6 +96,9 @@ declare global {
   // @ts-ignore
   export type { LoadDataOptions } from './composables/use-home-data'
   import('./composables/use-home-data')
+  // @ts-ignore
+  export type { HomeEditOptions } from './composables/use-home-edit'
+  import('./composables/use-home-edit')
 }
 
 // for vue template auto import
@@ -159,6 +163,7 @@ declare module 'vue' {
     readonly useCssVars: UnwrapRef<typeof import('vue')['useCssVars']>
     readonly useDragOrder: UnwrapRef<typeof import('./composables/use-drag-order')['useDragOrder']>
     readonly useHomeData: UnwrapRef<typeof import('./composables/use-home-data')['useHomeData']>
+    readonly useHomeEdit: UnwrapRef<typeof import('./composables/use-home-edit')['useHomeEdit']>
     readonly useId: UnwrapRef<typeof import('vue')['useId']>
     readonly useLink: UnwrapRef<typeof import('vue-router')['useLink']>
     readonly useModel: UnwrapRef<typeof import('vue')['useModel']>

@@ -1,0 +1,89 @@
+/* ---------- 右侧内容 ---------- */
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-4) 0;
+}
+.category-section,
+.category-anchor[data-scroll='feature'] {
+  scroll-margin-top: calc(var(--ui-header-height) + var(--space-4));
+}
+.category-section {
+  margin-bottom: calc(var(--space-9) - var(--space-1));
+  content-visibility: auto;
+  contain-intrinsic-size: auto 600px;
+}
+.section-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-2);
+}
+.section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+/* 分区右上角“进入分类”：占据原来 section-meta 的位置 */
+.section-more {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.section-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--bg-primary-soft);
+  border: 1px solid rgb(var(--color-primary) / 0.1);
+}
+.section-icon .el-icon {
+  font-size: var(--text-xl);
+  color: rgb(var(--color-primary));
+}
+.section-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
+  color: rgb(var(--color-text));
+}
+/* 子分类过滤 el-check-tag —— 胶囊标签 */
+.child-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.child-tabs .el-check-tag {
+  border-radius: var(--radius-full);
+  border: 0.5px solid var(--border-soft);
+  background: transparent;
+  color: rgb(var(--color-text-secondary));
+  padding: 3px var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1.4;
+  transition: all 0.2s;
+}
+.child-tabs .el-check-tag:hover {
+  color: rgb(var(--color-primary));
+  border-color: rgb(var(--color-border-active));
+}
+.child-tabs .el-check-tag.is-checked {
+  background: rgb(var(--color-primary));
+  border-color: rgb(var(--color-primary));
+  color: var(--text-on-primary);
+  font-weight: 600;
+}
+
+/* ---------- 卡片网格 ---------- */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-4);
+}

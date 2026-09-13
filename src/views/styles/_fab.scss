@@ -1,0 +1,30 @@
+/* ---------- 右下角悬浮操作（编辑开关 / 回到顶部） ---------- */
+.fab-stack {
+  position: fixed;
+  right: var(--space-5);
+  bottom: var(--space-6);
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+.fab-btn.el-button {
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgb(var(--color-border));
+  background: rgb(var(--color-bg-card));
+  color: rgb(var(--color-text-secondary));
+  box-shadow: var(--shadow-pop);
+  transition: all 0.2s;
+  &:hover {
+    color: rgb(var(--color-primary));
+    border-color: rgb(var(--color-primary) / 0.4);
+    transform: translateY(-2px);
+  }
+  &.el-button--primary {
+    background: rgb(var(--color-primary));
+    border-color: rgb(var(--color-primary));
+    color: var(--text-on-primary);
+  }
+}

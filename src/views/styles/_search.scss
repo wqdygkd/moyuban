@@ -1,0 +1,164 @@
+/* ---------- 顶部搜索区 ---------- */
+.page-home-top {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: var(--space-8) var(--space-4) var(--space-9);
+}
+/* 氛围光斑 */
+.page-home-top::before,
+.page-home-top::after {
+  content: '';
+  position: absolute;
+  width: 340px;
+  height: 340px;
+  border-radius: 50%;
+  filter: blur(70px);
+  pointer-events: none;
+  z-index: 0;
+}
+.page-home-top::before {
+  top: -120px;
+  right: 12%;
+  background: rgb(var(--color-primary) / 0.18);
+}
+.page-home-top::after {
+  bottom: -160px;
+  left: 10%;
+  background: var(--grad-brand);
+  opacity: 0.12;
+}
+.layout-search {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 620px;
+}
+
+/* 品牌问候语 */
+.hero-intro {
+  text-align: center;
+  margin-bottom: var(--space-2);
+}
+.hero-title {
+  margin: 0;
+  font-size: clamp(1.55rem, 1.6vw + 1rem, 2.1rem);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+  text-wrap: balance;
+  color: rgb(var(--color-text));
+}
+.hero-sub {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  color: rgb(var(--color-text-secondary));
+  font-variant-numeric: tabular-nums;
+}
+.hero-sub b {
+  color: rgb(var(--color-primary));
+  font-weight: 700;
+}
+.hero-sub i {
+  margin: 0 var(--space-2);
+  color: rgb(var(--color-text-muted));
+  font-style: normal;
+}
+
+/* SiteSearch 组件的外壳：layout-search 为窄性 flex 居中，组件需撑满并纵向排布 */
+.site-search {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+/* 引擎切换 el-segmented —— 胶囊段选 */
+.engine-segmented.el-segmented {
+  --el-segmented-bg-color: rgb(var(--color-bg-card));
+  --el-segmented-item-selected-bg-color: rgb(var(--color-primary));
+  --el-segmented-item-selected-color: var(--text-on-primary);
+  --el-segmented-item-hover-bg-color: rgb(var(--color-bg-card-hover));
+  --el-segmented-item-hover-color: rgb(var(--color-text));
+  border: 1px solid rgb(var(--color-border) / 0.6);
+  border-radius: var(--radius-full);
+  padding: var(--space-1);
+}
+.engine-segmented.el-segmented .el-segmented__item {
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  min-height: 30px;
+}
+.engine-segmented.el-segmented .el-segmented__item-selected {
+  border-radius: var(--radius-full);
+}
+.engine-segmented.el-segmented .el-segmented__item.is-selected {
+  box-shadow: var(--shadow-brand-sm);
+}
+
+/* 搜索表单 */
+.search-form {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 52px;
+  padding: 0 var(--space-2) 0 var(--space-4);
+  border-radius: var(--radius-full);
+  background: rgb(var(--color-bg-card));
+  border: 1px solid rgb(var(--color-border));
+  box-shadow: var(--shadow-pop);
+  transition:
+    border-color 0.2s,
+    box-shadow 0.25s;
+}
+.search-form:focus-within {
+  border-color: rgb(var(--color-primary));
+  box-shadow: var(--ring-focus);
+}
+.search-icon {
+  font-size: var(--text-xl);
+  color: rgb(var(--color-text-muted));
+  flex-shrink: 0;
+}
+.search-field.el-input {
+  flex: 1;
+  --el-input-border-color: transparent;
+  --el-input-hover-border-color: transparent;
+  --el-input-focus-border-color: transparent;
+  --el-input-bg-color: transparent;
+  --el-input-box-shadow: none;
+  --el-input-height: 44px;
+}
+.search-field .el-input__wrapper {
+  box-shadow: none;
+  padding: 0;
+}
+.search-field.el-input .el-input__inner {
+  font-size: var(--text-md);
+  color: rgb(var(--color-text));
+}
+.search-field.el-input .el-input__inner::placeholder {
+  color: rgb(var(--color-text-muted));
+}
+.search-btn.el-button {
+  flex-shrink: 0;
+  min-height: 42px;
+  padding: 0 var(--space-6);
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  border-radius: var(--radius-full);
+  box-shadow: none;
+}
+.search-btn.el-button:hover {
+  box-shadow: var(--shadow-brand-md);
+}

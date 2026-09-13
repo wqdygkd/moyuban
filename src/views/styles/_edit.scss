@@ -1,0 +1,52 @@
+/* ---------- 编辑模式提示条：与正文容器同宽（page-home-content 内整行） ---------- */
+.edit-banner {
+  width: 100%;
+  margin-bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px dashed rgb(var(--color-primary) / 0.5);
+  border-radius: var(--radius-md);
+  background: rgb(var(--color-primary) / 0.06);
+  color: rgb(var(--color-primary));
+  font-size: var(--text-sm);
+}
+
+/* 编辑模式下网格整体提示可拖拽 */
+.card-grid.is-edit {
+  outline: 1px dashed rgb(var(--color-border-active) / 0.4);
+  outline-offset: 12px;
+  border-radius: var(--radius-md);
+}
+
+/* 编辑模式：网格尾部「新增网址」占位块。
+   高度对齐卡片主行（--space-3*2 内边距 + 40px 图标）；不是 .site-card，不参与拖拽排序 */
+.grid-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 66px;
+  border: 1px dashed rgb(var(--color-border-active));
+  border-radius: var(--radius-card);
+  background: transparent;
+  color: rgb(var(--color-text-secondary));
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+  &:hover {
+    color: rgb(var(--color-primary));
+    border-color: rgb(var(--color-primary) / 0.5);
+    background: rgb(var(--color-primary) / 0.05);
+  }
+  .el-icon {
+    font-size: 16px;
+  }
+}
+
+/* Sortable 拖拽占位 */
+.site-card.sort-ghost {
+  opacity: 0.45;
+  box-shadow: 0 0 0 2px rgb(var(--color-primary));
+}

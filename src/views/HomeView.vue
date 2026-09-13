@@ -1,20 +1,16 @@
 <script setup lang="ts">
-import type { FormInstance, FormRules } from 'element-plus'
 import type { SortableEvent } from 'sortablejs'
 import type { CategoryHome, SiteHome, SubcategoryHome } from '@/types'
-import { ElMessage } from 'element-plus'
 import Sortable from 'sortablejs'
 import FaviconField from '@/components/FaviconField.vue'
 import SiteCard from '@/components/SiteCard.vue'
 import SiteSearch from '@/components/SiteSearch.vue'
 import { useDragOrder } from '@/composables/use-drag-order'
 import { useHomeData } from '@/composables/use-home-data'
+import { useHomeEdit } from '@/composables/use-home-edit'
 import { categoryApi, siteApi, subcategoryApi } from '@/services/api'
 import { useAuthStore } from '@/store/auth'
-import { isDeleteConfirmed } from '@/utils/confirm'
-import { getFaviconCandidates } from '@/utils/favicon'
 import { groupBy } from '@/utils/group'
-import { appendOrderKey } from '@/utils/order'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -54,13 +50,95 @@ function greeting(): string {
   return '晚上好，今天的班辛苦啦'
 }
 
-// ---------- 编辑模式开关（前置声明：左侧菜单点击改道要用到） ----------
-const editMode = ref(false)
-watch(() => auth.isLoggedIn, (v) => {
-  if (!v) editMode.value = false
+// ---------- 派生数据（Map 索引避免每行 filter；键统一用 String(id)，
+// 调用方不再需要数字/字符串双写、双查） ----------
+const subsByCat = computed(() => groupBy(subcategories.value, s => s.category_id))
+const sitesBySub = computed(() => groupBy(sites.value, s => s.subcategory_id))
+const sitesByCat = computed(() => {
+  const m = new Map<string, SiteHome[]>()
+  for (const cat of categories.value) {
+    const subs = subsByCat.value.get(String(cat.id)) || []
+    const list: SiteHome[] = []
+    for (const sub of subs) {
+      const arr = sitesBySub.value.get(String(sub.id))
+      if (arr) list.push(...arr)
+    }
+    m.set(String(cat.id), list)
+  }
+  return m
+})
+// 推荐列表从主数组派生（保持与拖拽排序同步），热门/最新只是过滤视角
+const featuredSites = computed(() => sites.value.filter(s => s.is_featured))
+const featuredList = computed(() => {
+  // “最新”按创建时间倒序：时间戳只解析一次（decorate-sort-undecorate），
+  // 不在 comparator 里反复 new Date（原写法每次比较都解析两次）。
+  if (recMode.value === 'new') {
+    return featuredSites.value
+      .map(s => ({ s, t: Date.parse(s.created_at || '') || 0 }))
+      .sort((a, b) => b.t - a.t)
+      .map(({ s }) => s)
+  }
+  const hot = featuredSites.value.filter(s => s.is_hot)
+  return hot.length ? hot : featuredSites.value
+})
+// ---------- 编辑域：编辑模式开关 + 分类/子分类/网址弹窗（增删改），数据与写库在 use-home-edit ----------
+const leftActive = ref('')
+const {
+  editMode,
+  catDialogVisible,
+  catForm,
+  catFormRef,
+  catSaving,
+  catRules,
+  catDeleting,
+  openCatDialog,
+  saveCat,
+  handleCatDelete,
+  subDialogVisible,
+  subForm,
+  subFormRef,
+  subSaving,
+  subRules,
+  subDeleting,
+  openSubDialog,
+  openSubCreate,
+  saveSub,
+  handleSubDelete,
+  editDialogVisible,
+  editForm,
+  editFormRef,
+  editSaving,
+  editRules,
+  editDeleting,
+  editFaviconCandidates,
+  openSiteCreate,
+  openEditDialog,
+  saveEdit,
+  handleEditDelete,
+} = useHomeEdit({
+  categories,
+  subcategories,
+  sites,
+  subsByCat,
+  sitesBySub,
+  sitesByCat,
+  activeSub,
+  leftActive,
+  menuRef,
+  syncHomeCache,
+  loadData,
+  // 新增成功后的视图收尾：重挂 Sortable / 补入场观察（新 DOM 不重挂会拖不动、缺 inview 不显示）
+  onSubCreated: () => {
+    initMenuSortables()
+    refreshSortableDisabled()
+  },
+  onSiteCreated: () => {
+    initGridSortables()
+    refreshSortableDisabled()
+    void setupReveal()
+  },
 })
 
-const leftActive = ref('')
 const leftOpeneds = computed(() => {
   if (!leftActive.value) return []
   const sep = leftActive.value.indexOf('::')
@@ -100,37 +178,6 @@ watch(leftOpeneds, (ids) => {
   nextTick(() => ids.forEach(id => menuRef.value?.open?.(id)))
 })
 
-// ---------- 派生数据（Map 索引避免每行 filter；键统一用 String(id)，
-// 调用方不再需要数字/字符串双写、双查） ----------
-const subsByCat = computed(() => groupBy(subcategories.value, s => s.category_id))
-const sitesBySub = computed(() => groupBy(sites.value, s => s.subcategory_id))
-const sitesByCat = computed(() => {
-  const m = new Map<string, SiteHome[]>()
-  for (const cat of categories.value) {
-    const subs = subsByCat.value.get(String(cat.id)) || []
-    const list: SiteHome[] = []
-    for (const sub of subs) {
-      const arr = sitesBySub.value.get(String(sub.id))
-      if (arr) list.push(...arr)
-    }
-    m.set(String(cat.id), list)
-  }
-  return m
-})
-// 推荐列表从主数组派生（保持与拖拽排序同步），热门/最新只是过滤视角
-const featuredSites = computed(() => sites.value.filter(s => s.is_featured))
-const featuredList = computed(() => {
-  // “最新”按创建时间倒序：时间戳只解析一次（decorate-sort-undecorate），
-  // 不在 comparator 里反复 new Date（原写法每次比较都解析两次）。
-  if (recMode.value === 'new') {
-    return featuredSites.value
-      .map(s => ({ s, t: Date.parse(s.created_at || '') || 0 }))
-      .sort((a, b) => b.t - a.t)
-      .map(({ s }) => s)
-  }
-  const hot = featuredSites.value.filter(s => s.is_hot)
-  return hot.length ? hot : featuredSites.value
-})
 function subsOf(id: string | number): SubcategoryHome[] {
   return subsByCat.value.get(String(id)) || []
 }
@@ -336,420 +383,6 @@ function initMenuSortables(): void {
       disabled: true,
       onEnd: evt => onMenuSubEnd(cid, evt),
     }))
-  }
-}
-
-const catDialogVisible = ref(false)
-const catSaving = ref(false)
-const catFormRef = ref<FormInstance>()
-
-interface CatFormState {
-  id: string | null
-  name: string
-  slug: string
-  icon: string
-  description: string
-}
-
-const catForm = reactive<CatFormState>({ id: null, name: '', slug: '', icon: '', description: '' })
-const catRules: FormRules<CatFormState> = {
-  name: [{ required: true, message: '请输入分类名称', trigger: 'blur' }],
-  slug: [{ required: true, message: '请输入标识', trigger: 'blur' }],
-}
-function openCatDialog(cat?: CategoryHome): void {
-  // 无参 = 新增：表单清空，弹窗按 catForm.id 区分新增/编辑
-  Object.assign(catForm, cat
-    ? { id: cat.id, name: cat.name, slug: cat.slug || '', icon: cat.icon || '', description: cat.description || '' }
-    : { id: null, name: '', slug: '', icon: '', description: '' })
-  catDialogVisible.value = true
-}
-// 分类 / 子分类弹窗共用保存流程：校验 → 写库 → 同步本地行 → 同步缓存 → 关窗
-// 表单无 id 走 create（返回新建行供调用方收尾），有 id 走 update 原地合并；失败返回 null
-async function saveMenuRow<TForm extends { id: string | number | null }, TRow extends { id: string | number | null }>(args: {
-  formRef: Ref<FormInstance | undefined>
-  saving: Ref<boolean>
-  form: TForm
-  create?: (payload: Omit<TForm, 'id'>) => Promise<TRow>
-  update: (id: string, payload: Record<string, unknown>) => Promise<unknown>
-  rows: Ref<TRow[]>
-  close: () => void
-}): Promise<TRow | null> {
-  const { formRef, saving, form, update, rows, close } = args
-  try {
-    await formRef.value?.validate()
-  } catch {
-    return null
-  }
-  saving.value = true
-  try {
-    const { id, ...payload } = form
-    let created: TRow | null = null
-    if (id == null) {
-      if (!args.create) return null
-      created = await args.create(payload)
-      rows.value.push(created)
-    } else {
-      await update(String(id), payload)
-      const i = rows.value.findIndex(r => String(r.id) === String(id))
-      if (i >= 0) Object.assign(rows.value[i], payload)
-    }
-    syncHomeCache()
-    close()
-    ElMessage.success(created ? '已新增' : '已保存')
-    return created
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '保存失败')
-    return null
-  } finally {
-    saving.value = false
-  }
-}
-async function saveCat(): Promise<void> {
-  const created = await saveMenuRow({
-    formRef: catFormRef,
-    saving: catSaving,
-    form: catForm,
-    create: (payload): Promise<CategoryHome> =>
-      // 新分类固定排到末尾
-      categoryApi.create({ ...payload, sort_order: appendOrderKey(categories.value) }),
-    update: (id, payload) => categoryApi.update(id, payload as Partial<{ name: string, slug: string, icon: string, description: string }>),
-    rows: categories,
-    close: () => (catDialogVisible.value = false),
-  })
-  // 新分类默认折叠且 unique-opened，自动展开让「新增子分类」入口可见
-  if (created) menuRef.value?.open?.(String(created.id))
-}
-
-const catDeleting = ref(false)
-async function handleCatDelete(): Promise<void> {
-  if (!catForm.id) return
-  const key = String(catForm.id)
-  const cat = categories.value.find(c => String(c.id) === key)
-  const subs = subsByCat.value.get(key) || []
-  const siteCount = sitesByCat.value.get(key)?.length ?? 0
-  // 库里 subcategories/sites 对上级是 on delete cascade，删除分类会连子级一起没了，
-  // 确认文案必须把连带数量说清楚，避免误删整个板块
-  const detail = subs.length
-    ? `其下 ${subs.length} 个子分类、${siteCount} 个网址将一并删除，且不可恢复`
-    : '删除后不可恢复'
-  if (!await isDeleteConfirmed(`确定删除分类「${cat?.name || catForm.name}」吗？${detail}。`))
-    return
-  catDeleting.value = true
-  try {
-    await categoryApi.remove(key)
-    // 服务端已级联删除子分类和网址，本地同步清掉，否则缓存和站点计数会残留幽灵数据
-    const subIds = new Set(subs.map(s => String(s.id)))
-    sites.value.splice(0, sites.value.length, ...sites.value.filter(s => !s.subcategory_id || !subIds.has(String(s.subcategory_id))))
-    subcategories.value.splice(0, subcategories.value.length, ...subcategories.value.filter(s => !subIds.has(String(s.id))))
-    const ci = categories.value.findIndex(c => String(c.id) === key)
-    if (ci >= 0) categories.value.splice(ci, 1)
-    delete activeSub[key]
-    if (leftActive.value.startsWith(`${key}::`)) leftActive.value = ''
-    syncHomeCache()
-    catDialogVisible.value = false
-    ElMessage.success('已删除')
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '删除失败')
-  } finally {
-    catDeleting.value = false
-  }
-}
-const subDialogVisible = ref(false)
-const subSaving = ref(false)
-const subFormRef = ref<FormInstance>()
-
-interface SubFormState {
-  id: string | null
-  category_id: string
-  name: string
-  slug: string
-}
-
-const subForm = reactive<SubFormState>({ id: null, category_id: '', name: '', slug: '' })
-const subRules: FormRules<SubFormState> = {
-  category_id: [{ required: true, message: '请选择所属分类', trigger: 'change' }],
-  name: [{ required: true, message: '请输入子分类名称', trigger: 'blur' }],
-}
-function openSubDialog(sub: SubcategoryHome): void {
-  Object.assign(subForm, { id: sub.id, category_id: sub.category_id, name: sub.name, slug: sub.slug || '' })
-  subDialogVisible.value = true
-}
-function openSubCreate(catId: string): void {
-  Object.assign(subForm, { id: null, category_id: catId, name: '', slug: '' })
-  subDialogVisible.value = true
-}
-async function saveSub(): Promise<void> {
-  const created = await saveMenuRow({
-    formRef: subFormRef,
-    saving: subSaving,
-    form: subForm,
-    create: (payload): Promise<SubcategoryHome> =>
-      // 新子分类排到同分类末尾
-      subcategoryApi.create({ ...payload, sort_order: appendOrderKey(subsOf(payload.category_id)) }),
-    update: (id, payload) => subcategoryApi.update(id, payload as Partial<SubcategoryHome>),
-    rows: subcategories,
-    close: () => (subDialogVisible.value = false),
-  })
-  // 新增成功才重挂：新分类的子菜单 ul 或新条目是后渲染 DOM，拖拽实例需重建
-  if (created) {
-    nextTick(() => {
-      initMenuSortables()
-      refreshSortableDisabled()
-    })
-  }
-}
-
-const subDeleting = ref(false)
-async function handleSubDelete(): Promise<void> {
-  if (!subForm.id) return
-  const key = String(subForm.id)
-  const sub = subcategories.value.find(s => String(s.id) === key)
-  const siteCount = sitesBySub.value.get(key)?.length ?? 0
-  const detail = siteCount ? `其下 ${siteCount} 个网址将一并删除，且不可恢复` : '删除后不可恢复'
-  if (!await isDeleteConfirmed(`确定删除子分类「${sub?.name || subForm.name}」吗？${detail}。`))
-    return
-  subDeleting.value = true
-  try {
-    await subcategoryApi.remove(key)
-    // 网址随外键级联删除，本地同步清掉再写缓存
-    sites.value.splice(0, sites.value.length, ...sites.value.filter(s => String(s.subcategory_id) !== key))
-    const si = subcategories.value.findIndex(s => String(s.id) === key)
-    if (si >= 0) subcategories.value.splice(si, 1)
-    const catKey = String(subForm.category_id)
-    if (activeSub[catKey] === key) activeSub[catKey] = null
-    if (leftActive.value === `${catKey}::${key}`) leftActive.value = ''
-    syncHomeCache()
-    subDialogVisible.value = false
-    ElMessage.success('已删除')
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '删除失败')
-  } finally {
-    subDeleting.value = false
-  }
-}
-
-const editDialogVisible = ref(false)
-const editSaving = ref(false)
-const editFormRef = ref<FormInstance>()
-const originalSubId = ref('')
-
-interface EditFormState {
-  id: string | null
-  category_id: string
-  subcategory_id: string
-  name: string
-  url: string
-  description: string
-  keywords: string
-  favicon_url: string
-  is_featured: boolean
-  is_hot: boolean
-  is_new: boolean
-  is_active: boolean
-}
-
-const editForm = reactive<EditFormState>({
-  id: null,
-  category_id: '',
-  subcategory_id: '',
-  name: '',
-  url: '',
-  description: '',
-  keywords: '',
-  favicon_url: '',
-  is_featured: false,
-  is_hot: false,
-  is_new: false,
-  is_active: true,
-})
-const editRules: FormRules<EditFormState> = {
-  name: [{ required: true, message: '请输入网站名称', trigger: 'blur' }],
-  url: [
-    { required: true, message: '请输入网站链接', trigger: 'blur' },
-    {
-      validator: (_r, v, cb) => {
-        if (v && !/^https?:\/\//i.test(v)) cb(new Error('链接需以 http:// 或 https:// 开头'))
-        else cb()
-      },
-      trigger: 'blur',
-    },
-  ],
-}
-const editFaviconCandidates = computed(() =>
-  editForm.url ? getFaviconCandidates({ url: editForm.url }) : [],
-)
-// 新增网址入口（网格尾部 + 号）：预选当前分类与激活中的子分类
-function openSiteCreate(catId: string): void {
-  const subs = subsOf(catId)
-  if (!subs.length) {
-    ElMessage.warning('该分类下还没有子分类，请先在左侧菜单添加子分类')
-    return
-  }
-  const active = activeSub[catId]
-  const subId = active && subs.some(s => String(s.id) === active) ? active : String(subs[0].id)
-  Object.assign(editForm, {
-    id: null,
-    category_id: catId,
-    subcategory_id: subId,
-    name: '',
-    url: '',
-    description: '',
-    keywords: '',
-    favicon_url: '',
-    is_featured: false,
-    is_hot: false,
-    is_new: false,
-    is_active: true,
-  })
-  originalSubId.value = ''
-  editDialogVisible.value = true
-}
-function openEditDialog(site: SiteHome): void {
-  const sub = subcategories.value.find(s => String(s.id) === String(site.subcategory_id))
-  Object.assign(editForm, {
-    id: site.id,
-    category_id: sub ? sub.category_id : '',
-    subcategory_id: site.subcategory_id ?? '',
-    name: site.name,
-    url: site.url,
-    description: site.description || '',
-    keywords: site.keywords || '',
-    favicon_url: site.favicon_url || '',
-    is_featured: !!site.is_featured,
-    is_hot: !!site.is_hot,
-    is_new: !!site.is_new,
-    is_active: site.is_active !== false,
-  })
-  originalSubId.value = site.subcategory_id ?? ''
-  editDialogVisible.value = true
-}
-async function saveEdit(): Promise<void> {
-  try {
-    await editFormRef.value?.validate()
-  } catch {
-    return
-  }
-  if (!editForm.subcategory_id) {
-    ElMessage.warning('请选择所属子分类')
-    return
-  }
-  // 弹窗复用：表单无 id = 新增
-  if (!editForm.id) return saveSiteCreate()
-  editSaving.value = true
-  try {
-    const payload: {
-      name: string
-      url: string
-      description: string
-      keywords: string
-      favicon_url: string
-      is_featured: boolean
-      is_hot: boolean
-      is_new: boolean
-      is_active: boolean
-      subcategory_id?: string
-      sort_order?: string
-    } = {
-      name: editForm.name,
-      url: editForm.url,
-      description: editForm.description,
-      keywords: editForm.keywords,
-      favicon_url: editForm.favicon_url,
-      is_featured: editForm.is_featured,
-      is_hot: editForm.is_hot,
-      is_new: editForm.is_new,
-      is_active: editForm.is_active,
-    }
-    const subChanged = editForm.subcategory_id !== originalSubId.value
-    if (subChanged) {
-      // 换组：排到新组末尾
-      payload.subcategory_id = editForm.subcategory_id
-      payload.sort_order = await siteApi.endKeyForSub(editForm.subcategory_id)
-    }
-    await siteApi.update(editForm.id, payload)
-    editDialogVisible.value = false
-    ElMessage.success('已保存')
-    if (subChanged) {
-      // 跨组移动涉及分组展示，整体静默重拉最稳
-      await loadData({ silent: true, force: true })
-      return
-    }
-    const idx = sites.value.findIndex(s => s.id === editForm.id)
-    if (idx >= 0) sites.value.splice(idx, 1, { ...sites.value[idx], ...payload })
-    syncHomeCache()
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '保存失败')
-  } finally {
-    editSaving.value = false
-  }
-}
-
-// 新增网址：固定排到所选子分类末尾（endKeyForSub 生成末尾排序键）
-async function saveSiteCreate(): Promise<void> {
-  editSaving.value = true
-  try {
-    const payload = {
-      subcategory_id: editForm.subcategory_id,
-      name: editForm.name,
-      url: editForm.url,
-      description: editForm.description,
-      keywords: editForm.keywords,
-      favicon_url: editForm.favicon_url,
-      is_featured: editForm.is_featured,
-      is_hot: editForm.is_hot,
-      is_new: editForm.is_new,
-      is_active: editForm.is_active,
-      sort_order: await siteApi.endKeyForSub(editForm.subcategory_id),
-    }
-    const created = await siteApi.create(payload)
-    // 停用行前台不展示（fetchSites 过滤 is_active），本地不入列，避免与刷新后的展示不一致
-    if (created.is_active !== false) {
-      // 主数组全局按 sort_order 字典序：按键找位插入而非尾插，
-      // 保证「智能推荐」等派生视图的相对顺序与刷新后一致
-      const key = created.sort_order ?? ''
-      let at = sites.value.length
-      for (let i = 0; i < sites.value.length; i++) {
-        if ((sites.value[i]?.sort_order ?? '') > key) {
-          at = i
-          break
-        }
-      }
-      sites.value.splice(at, 0, created)
-    }
-    syncHomeCache()
-    editDialogVisible.value = false
-    ElMessage.success(created.is_active !== false ? '已新增' : '已新增（已停用，前台不展示）')
-    // 新格子/新分区是后渲染 DOM：重挂网格拖拽，并补一次入场观察（否则新卡片缺 inview 不显示）
-    nextTick(() => {
-      initGridSortables()
-      refreshSortableDisabled()
-      void setupReveal()
-    })
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '保存失败')
-  } finally {
-    editSaving.value = false
-  }
-}
-
-const editDeleting = ref(false)
-async function handleEditDelete(): Promise<void> {
-  if (!editForm.id) return
-  const target = sites.value.find(s => s.id === editForm.id)
-  if (!await isDeleteConfirmed(`确定删除「${target?.name || editForm.name || ''}」吗？删除后不可恢复。`))
-    return
-  editDeleting.value = true
-  try {
-    await siteApi.remove(editForm.id)
-    const i = sites.value.findIndex(s => s.id === editForm.id)
-    if (i >= 0) sites.value.splice(i, 1)
-    syncHomeCache()
-    editDialogVisible.value = false
-    ElMessage.success('已删除')
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : '删除失败')
-  } finally {
-    editDeleting.value = false
   }
 }
 

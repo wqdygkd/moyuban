@@ -1,0 +1,92 @@
+/* ============================================================
+   响应式
+   ============================================================ */
+@media (max-width: 860px) {
+  .page-main {
+    gap: 0;
+  }
+  .aside {
+    width: var(--ui-aside-width);
+  }
+  .content {
+    padding: var(--space-4) 4px;
+  }
+}
+
+/* 移动端：左侧菜单改为抽屉 */
+@media (max-width: 768px) {
+  .aside {
+    width: 0;
+  }
+  .aside-sticky {
+    position: fixed;
+    top: var(--ui-header-height);
+    left: 0;
+    z-index: 999;
+    width: var(--ui-aside-width);
+    max-width: 80vw;
+    height: calc(100dvh - var(--ui-header-height));
+    background: rgb(var(--color-bg-card));
+    border-right: 1px solid rgb(var(--color-border));
+    padding: var(--space-3);
+    overflow: hidden auto;
+    transform: translateX(-100%);
+    transition: transform 0.32s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  .aside.menu-open .aside-sticky {
+    transform: translateX(0);
+  }
+  .aside .main-menu {
+    max-height: none;
+    overflow: visible;
+    backdrop-filter: none;
+  }
+  .menu-toggle.el-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: calc(var(--ui-header-height) + var(--space-3));
+    left: var(--space-3);
+    z-index: 1000;
+    width: 36px;
+    height: 36px;
+    border: 1px solid rgb(var(--color-border));
+    background: rgb(var(--color-bg-card));
+    color: rgb(var(--color-text));
+    box-shadow: var(--shadow-pop);
+    font-size: var(--text-xl);
+  }
+  .menu-backdrop.menu-open {
+    display: block;
+    position: fixed;
+    inset: 0;
+    top: var(--ui-header-height);
+    background: rgb(var(--color-overlay) / 0.35);
+    z-index: 998;
+  }
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .page-home-top {
+    padding: var(--space-5) var(--space-4);
+  }
+  .search-btn.el-button {
+    padding: 0 var(--space-4);
+    font-size: var(--text-md);
+  }
+  .card-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .fab-stack {
+    right: var(--space-3);
+    bottom: var(--space-4);
+  }
+  .fab-btn.el-button {
+    width: 40px;
+    height: 40px;
+  }
+}

@@ -31,6 +31,8 @@
   color: rgb(var(--color-text-muted));
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .aside .main-menu {
   max-height: calc(100dvh - var(--ui-header-height) - var(--space-8) - 28px);
@@ -74,7 +76,7 @@
   margin-bottom: 0;
 }
 
-/* ---------- 主分类（sub-menu 标题）——更松、带图标盒与计数 ---------- */
+/* ---------- 主分类（sub-menu 标题）——更松、带图标盒 ---------- */
 .main-menu.el-menu .el-sub-menu__title {
   position: relative;
   height: auto;
@@ -122,35 +124,8 @@
   transition: color 0.2s;
   margin-right: 0;
 }
-.sub-count {
-  flex-shrink: 0;
-  min-width: 20px;
-  padding: 2px 6px;
-  border-radius: var(--radius-full);
-  background: rgb(var(--color-bg-card-hover));
-  border: 1px solid rgb(var(--color-border) / 0.5);
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1;
-  text-align: center;
-  color: rgb(var(--color-text-muted));
-  font-variant-numeric: tabular-nums;
-  transition: all 0.2s;
-}
-.main-menu.el-menu .el-sub-menu__title:hover {
-  background: rgb(var(--color-bg-card-hover));
-  color: rgb(var(--color-primary));
-}
-.main-menu.el-menu .el-sub-menu__title:hover .sub-icon-box {
-  border-color: rgb(var(--color-border-active) / 0.35);
-  background: var(--bg-primary-soft);
-}
 .main-menu.el-menu .el-sub-menu__title:hover .sub-icon-box .el-icon {
   color: rgb(var(--color-primary));
-}
-.main-menu.el-menu .el-sub-menu__title:hover .sub-count {
-  color: rgb(var(--color-primary));
-  border-color: rgb(var(--color-primary) / 0.25);
 }
 /* 滚动高亮：主状态（强） */
 .main-menu.el-menu .el-sub-menu.is-nav-active > .el-sub-menu__title,
@@ -164,11 +139,6 @@
 }
 .main-menu.el-menu .el-sub-menu.is-nav-active > .el-sub-menu__title .sub-icon-box .el-icon {
   color: var(--text-on-primary);
-}
-.main-menu.el-menu .el-sub-menu.is-nav-active > .el-sub-menu__title .sub-count {
-  background: rgb(var(--color-primary));
-  color: var(--text-on-primary);
-  border-color: rgb(var(--color-primary));
 }
 /* 过滤态父级不跟随高亮，仅保留滚动主态；子项高亮见下方 .el-menu-item.is-active */
 /* 激活态左侧 3px 指示条 */

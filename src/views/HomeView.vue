@@ -521,7 +521,6 @@ onBeforeUnmount(() => {
                     <div class="sub-title-hit" @click.stop="scrollToFeature">
                       <span class="sub-icon-box"><el-icon><Trophy /></el-icon></span>
                       <span>智能推荐</span>
-                      <span class="sub-count">{{ featuredSites.length }}</span>
                     </div>
                   </template>
                   <el-menu-item index="feature-hot">
@@ -536,7 +535,6 @@ onBeforeUnmount(() => {
                     <div class="sub-title-hit" @click.stop="editMode ? openCatDialog(cat) : scrollToId(cat.id)">
                       <span class="sub-icon-box"><el-icon><component :is="cat.icon || 'Folder'" /></el-icon></span>
                       <span class="sub-name">{{ cat.name }}</span>
-                      <span class="sub-count">{{ subsOf(cat.id).length }}</span>
                     </div>
                   </template>
                   <el-menu-item v-for="sub in subsOf(cat.id)" :key="sub.id" :index="`${cat.id}::${sub.id}`" :class="{ 'is-active': activeSub[String(cat.id)] === String(sub.id) }">

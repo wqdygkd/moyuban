@@ -14,6 +14,7 @@ import { useAuthStore } from '@/store/auth'
 import { isDeleteConfirmed } from '@/utils/confirm'
 import { getFaviconCandidates } from '@/utils/favicon'
 import { groupBy } from '@/utils/group'
+import { appendOrderKey } from '@/utils/order'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -69,13 +70,18 @@ const leftOpeneds = computed(() => {
 })
 function onMenuSelect(index: string): void {
   // 编辑模式下点二级菜单直接进编辑，不做导航筛选
-  if (editMode.value && !index.startsWith('feature')) {
-    const sep = index.indexOf('::')
-    if (sep > 0) {
-      const sub = subcategories.value.find(s => String(s.id) === index.slice(sep + 2))
-      if (sub) return openSubDialog(sub)
+  if (editMode.value) {
+    // 菜单尾部新增入口：直接开新建弹窗（索引格式 newsub::<catId>）
+    if (index === 'cat-create') return openCatDialog()
+    if (index.startsWith('newsub::')) return openSubCreate(index.slice(8))
+    if (!index.startsWith('feature')) {
+      const sep = index.indexOf('::')
+      if (sep > 0) {
+        const sub = subcategories.value.find(s => String(s.id) === index.slice(sep + 2))
+        if (sub) return openSubDialog(sub)
+      }
+      return
     }
-    return
   }
   if (index.startsWith('feature-')) {
     leftActive.value = index
@@ -350,50 +356,68 @@ const catRules: FormRules<CatFormState> = {
   name: [{ required: true, message: '请输入分类名称', trigger: 'blur' }],
   slug: [{ required: true, message: '请输入标识', trigger: 'blur' }],
 }
-function openCatDialog(cat: CategoryHome): void {
-  Object.assign(catForm, { id: cat.id, name: cat.name, slug: cat.slug || '', icon: cat.icon || '', description: cat.description || '' })
+function openCatDialog(cat?: CategoryHome): void {
+  // 无参 = 新增：表单清空，弹窗按 catForm.id 区分新增/编辑
+  Object.assign(catForm, cat
+    ? { id: cat.id, name: cat.name, slug: cat.slug || '', icon: cat.icon || '', description: cat.description || '' }
+    : { id: null, name: '', slug: '', icon: '', description: '' })
   catDialogVisible.value = true
 }
 // 分类 / 子分类弹窗共用保存流程：校验 → 写库 → 同步本地行 → 同步缓存 → 关窗
+// 表单无 id 走 create（返回新建行供调用方收尾），有 id 走 update 原地合并；失败返回 null
 async function saveMenuRow<TForm extends { id: string | number | null }, TRow extends { id: string | number | null }>(args: {
   formRef: Ref<FormInstance | undefined>
   saving: Ref<boolean>
   form: TForm
+  create?: (payload: Omit<TForm, 'id'>) => Promise<TRow>
   update: (id: string, payload: Record<string, unknown>) => Promise<unknown>
   rows: Ref<TRow[]>
   close: () => void
-}): Promise<void> {
+}): Promise<TRow | null> {
   const { formRef, saving, form, update, rows, close } = args
   try {
     await formRef.value?.validate()
   } catch {
-    return
+    return null
   }
   saving.value = true
   try {
     const { id, ...payload } = form
-    if (id == null) return
-    await update(String(id), payload)
-    const i = rows.value.findIndex(r => String(r.id) === String(id))
-    if (i >= 0) Object.assign(rows.value[i], payload)
+    let created: TRow | null = null
+    if (id == null) {
+      if (!args.create) return null
+      created = await args.create(payload)
+      rows.value.push(created)
+    } else {
+      await update(String(id), payload)
+      const i = rows.value.findIndex(r => String(r.id) === String(id))
+      if (i >= 0) Object.assign(rows.value[i], payload)
+    }
     syncHomeCache()
     close()
-    ElMessage.success('已保存')
+    ElMessage.success(created ? '已新增' : '已保存')
+    return created
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : '保存失败')
+    return null
   } finally {
     saving.value = false
   }
 }
 async function saveCat(): Promise<void> {
-  await saveMenuRow({
+  const created = await saveMenuRow({
     formRef: catFormRef,
     saving: catSaving,
     form: catForm,
+    create: (payload): Promise<CategoryHome> =>
+      // 新分类固定排到末尾
+      categoryApi.create({ ...payload, sort_order: appendOrderKey(categories.value) }),
     update: (id, payload) => categoryApi.update(id, payload as Partial<{ name: string, slug: string, icon: string, description: string }>),
     rows: categories,
     close: () => (catDialogVisible.value = false),
   })
+  // 新分类默认折叠且 unique-opened，自动展开让「新增子分类」入口可见
+  if (created) menuRef.value?.open?.(String(created.id))
 }
 
 const catDeleting = ref(false)
@@ -450,15 +474,29 @@ function openSubDialog(sub: SubcategoryHome): void {
   Object.assign(subForm, { id: sub.id, category_id: sub.category_id, name: sub.name, slug: sub.slug || '' })
   subDialogVisible.value = true
 }
+function openSubCreate(catId: string): void {
+  Object.assign(subForm, { id: null, category_id: catId, name: '', slug: '' })
+  subDialogVisible.value = true
+}
 async function saveSub(): Promise<void> {
-  await saveMenuRow({
+  const created = await saveMenuRow({
     formRef: subFormRef,
     saving: subSaving,
     form: subForm,
+    create: (payload): Promise<SubcategoryHome> =>
+      // 新子分类排到同分类末尾
+      subcategoryApi.create({ ...payload, sort_order: appendOrderKey(subsOf(payload.category_id)) }),
     update: (id, payload) => subcategoryApi.update(id, payload as Partial<SubcategoryHome>),
     rows: subcategories,
     close: () => (subDialogVisible.value = false),
   })
+  // 新增成功才重挂：新分类的子菜单 ul 或新条目是后渲染 DOM，拖拽实例需重建
+  if (created) {
+    nextTick(() => {
+      initMenuSortables()
+      refreshSortableDisabled()
+    })
+  }
 }
 
 const subDeleting = ref(false)
@@ -540,6 +578,32 @@ const editRules: FormRules<EditFormState> = {
 const editFaviconCandidates = computed(() =>
   editForm.url ? getFaviconCandidates({ url: editForm.url }) : [],
 )
+// 新增网址入口（网格尾部 + 号）：预选当前分类与激活中的子分类
+function openSiteCreate(catId: string): void {
+  const subs = subsOf(catId)
+  if (!subs.length) {
+    ElMessage.warning('该分类下还没有子分类，请先在左侧菜单添加子分类')
+    return
+  }
+  const active = activeSub[catId]
+  const subId = active && subs.some(s => String(s.id) === active) ? active : String(subs[0].id)
+  Object.assign(editForm, {
+    id: null,
+    category_id: catId,
+    subcategory_id: subId,
+    name: '',
+    url: '',
+    description: '',
+    keywords: '',
+    favicon_url: '',
+    is_featured: false,
+    is_hot: false,
+    is_new: false,
+    is_active: true,
+  })
+  originalSubId.value = ''
+  editDialogVisible.value = true
+}
 function openEditDialog(site: SiteHome): void {
   const sub = subcategories.value.find(s => String(s.id) === String(site.subcategory_id))
   Object.assign(editForm, {
@@ -569,7 +633,8 @@ async function saveEdit(): Promise<void> {
     ElMessage.warning('请选择所属子分类')
     return
   }
-  if (!editForm.id) return
+  // 弹窗复用：表单无 id = 新增
+  if (!editForm.id) return saveSiteCreate()
   editSaving.value = true
   try {
     const payload: {
@@ -612,6 +677,54 @@ async function saveEdit(): Promise<void> {
     const idx = sites.value.findIndex(s => s.id === editForm.id)
     if (idx >= 0) sites.value.splice(idx, 1, { ...sites.value[idx], ...payload })
     syncHomeCache()
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '保存失败')
+  } finally {
+    editSaving.value = false
+  }
+}
+
+// 新增网址：固定排到所选子分类末尾（endKeyForSub 生成末尾排序键）
+async function saveSiteCreate(): Promise<void> {
+  editSaving.value = true
+  try {
+    const payload = {
+      subcategory_id: editForm.subcategory_id,
+      name: editForm.name,
+      url: editForm.url,
+      description: editForm.description,
+      keywords: editForm.keywords,
+      favicon_url: editForm.favicon_url,
+      is_featured: editForm.is_featured,
+      is_hot: editForm.is_hot,
+      is_new: editForm.is_new,
+      is_active: editForm.is_active,
+      sort_order: await siteApi.endKeyForSub(editForm.subcategory_id),
+    }
+    const created = await siteApi.create(payload)
+    // 停用行前台不展示（fetchSites 过滤 is_active），本地不入列，避免与刷新后的展示不一致
+    if (created.is_active !== false) {
+      // 主数组全局按 sort_order 字典序：按键找位插入而非尾插，
+      // 保证「智能推荐」等派生视图的相对顺序与刷新后一致
+      const key = created.sort_order ?? ''
+      let at = sites.value.length
+      for (let i = 0; i < sites.value.length; i++) {
+        if ((sites.value[i]?.sort_order ?? '') > key) {
+          at = i
+          break
+        }
+      }
+      sites.value.splice(at, 0, created)
+    }
+    syncHomeCache()
+    editDialogVisible.value = false
+    ElMessage.success(created.is_active !== false ? '已新增' : '已新增（已停用，前台不展示）')
+    // 新格子/新分区是后渲染 DOM：重挂网格拖拽，并补一次入场观察（否则新卡片缺 inview 不显示）
+    nextTick(() => {
+      initGridSortables()
+      refreshSortableDisabled()
+      void setupReveal()
+    })
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : '保存失败')
   } finally {
@@ -762,7 +875,7 @@ onBeforeUnmount(() => {
         <transition name="el-fade-in-linear">
           <div v-if="editMode" class="edit-banner">
             <el-icon><InfoFilled /></el-icon>
-            <span>编辑模式：拖拽调整顺序，点击卡片或菜单进行编辑</span>
+            <span>编辑模式：点击卡片或菜单编辑，点 + 新增分类 / 子分类 / 网址，拖拽调整顺序</span>
           </div>
         </transition>
         <div class="page-main">
@@ -801,7 +914,15 @@ onBeforeUnmount(() => {
                     {{ sub.name }}
                     <span v-if="editMode" class="menu-drag" title="拖拽排序">⠿</span>
                   </el-menu-item>
+                  <el-menu-item v-if="editMode" :index="`newsub::${cat.id}`" class="menu-add-item">
+                    <el-icon><Plus /></el-icon>
+                    新增子分类
+                  </el-menu-item>
                 </el-sub-menu>
+                <el-menu-item v-if="editMode" index="cat-create" class="menu-add-item menu-add-root">
+                  <el-icon><Plus /></el-icon>
+                  新增分类
+                </el-menu-item>
               </el-menu>
             </div>
             <div v-if="sideOpen" class="menu-backdrop menu-open" @click="sideOpen = false" />
@@ -870,7 +991,7 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="section-content">
                   <div
-                    v-if="sitesOf(cat.id).length"
+                    v-if="sitesOf(cat.id).length || editMode"
                     class="card-grid"
                     :class="{ 'is-edit': editMode }"
                     data-grid="cat"
@@ -884,6 +1005,10 @@ onBeforeUnmount(() => {
                       :style="{ '--i': idx }"
                       @edit="openEditDialog(site)"
                     />
+                    <button v-if="editMode" type="button" class="grid-add" title="在该分类下新增网址" @click="openSiteCreate(String(cat.id))">
+                      <el-icon><Plus /></el-icon>
+                      <span>新增网址</span>
+                    </button>
                   </div>
                   <el-empty v-else :image-size="60" description="该分类暂无网址" />
                 </div>
@@ -918,7 +1043,7 @@ onBeforeUnmount(() => {
       </transition>
     </div>
 
-    <el-dialog v-model="editDialogVisible" title="编辑网址" width="520px" destroy-on-close>
+    <el-dialog v-model="editDialogVisible" :title="editForm.id ? '编辑网址' : '新增网址'" width="520px" destroy-on-close>
       <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="90px">
         <el-form-item label="所属分类">
           <el-select v-model="editForm.category_id" placeholder="选择主分类" style="width: 100%" @change="editForm.subcategory_id = ''">
@@ -962,10 +1087,10 @@ onBeforeUnmount(() => {
       </el-form>
       <template #footer>
         <div style="display: flex; justify-content: space-between; align-items: center">
-          <el-button type="danger" plain :loading="editDeleting" @click="handleEditDelete">
+          <el-button v-if="editForm.id" type="danger" plain :loading="editDeleting" @click="handleEditDelete">
             删除
           </el-button>
-          <div>
+          <div style="margin-left: auto">
             <el-button @click="editDialogVisible = false">
               取消
             </el-button>
@@ -977,7 +1102,7 @@ onBeforeUnmount(() => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="catDialogVisible" title="编辑分类" width="480px" destroy-on-close>
+    <el-dialog v-model="catDialogVisible" :title="catForm.id ? '编辑分类' : '新增分类'" width="480px" destroy-on-close>
       <el-form ref="catFormRef" :model="catForm" :rules="catRules" label-width="90px">
         <el-form-item label="分类名称" prop="name">
           <el-input v-model="catForm.name" placeholder="例如：生活服务" />
@@ -994,10 +1119,10 @@ onBeforeUnmount(() => {
       </el-form>
       <template #footer>
         <div style="display: flex; justify-content: space-between; align-items: center">
-          <el-button type="danger" plain :loading="catDeleting" @click="handleCatDelete">
+          <el-button v-if="catForm.id" type="danger" plain :loading="catDeleting" @click="handleCatDelete">
             删除
           </el-button>
-          <div>
+          <div style="margin-left: auto">
             <el-button @click="catDialogVisible = false">
               取消
             </el-button>
@@ -1009,7 +1134,7 @@ onBeforeUnmount(() => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="subDialogVisible" title="编辑子分类" width="480px" destroy-on-close>
+    <el-dialog v-model="subDialogVisible" :title="subForm.id ? '编辑子分类' : '新增子分类'" width="480px" destroy-on-close>
       <el-form ref="subFormRef" :model="subForm" :rules="subRules" label-width="100px">
         <el-form-item label="所属分类" prop="category_id">
           <el-select v-model="subForm.category_id" placeholder="选择主分类" style="width: 100%">
@@ -1025,10 +1150,10 @@ onBeforeUnmount(() => {
       </el-form>
       <template #footer>
         <div style="display: flex; justify-content: space-between; align-items: center">
-          <el-button type="danger" plain :loading="subDeleting" @click="handleSubDelete">
+          <el-button v-if="subForm.id" type="danger" plain :loading="subDeleting" @click="handleSubDelete">
             删除
           </el-button>
-          <div>
+          <div style="margin-left: auto">
             <el-button @click="subDialogVisible = false">
               取消
             </el-button>

@@ -449,6 +449,31 @@
   font-weight: 600;
   transform: none;
 }
+/* 编辑模式：菜单尾部「新增分类 / 新增子分类」入口——动作项而非导航项，
+   需压掉点选后 el-menu 挂上的 is-active 高亮，避免看起来像切了目录 */
+.main-menu.el-menu .el-menu-item.menu-add-item {
+  color: rgb(var(--color-text-muted));
+  &:hover {
+    color: rgb(var(--color-primary));
+    background: var(--bg-primary-soft);
+  }
+  .el-icon {
+    font-size: 13px;
+  }
+  &.is-active,
+  &.is-active:hover {
+    color: rgb(var(--color-text-muted));
+    background: transparent;
+    font-weight: 500;
+    transform: none;
+  }
+}
+.main-menu.el-menu .el-menu-item.menu-add-root {
+  padding-left: 14px !important;
+  margin-top: 4px;
+  border-top: 1px dashed rgb(var(--color-border) / 0.7);
+  border-radius: 0 0 10px 10px;
+}
 
 .menu-toggle.el-button {
   display: none;
@@ -598,6 +623,31 @@
   outline: 1px dashed rgb(var(--color-border-active) / 0.4);
   outline-offset: 12px;
   border-radius: var(--radius-md);
+}
+
+/* 编辑模式：网格尾部「新增网址」占位块。
+   高度对齐卡片主行（--space-3*2 内边距 + 40px 图标）；不是 .site-card，不参与拖拽排序 */
+.grid-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 66px;
+  border: 1px dashed rgb(var(--color-border-active));
+  border-radius: var(--radius-card);
+  background: transparent;
+  color: rgb(var(--color-text-secondary));
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+  &:hover {
+    color: rgb(var(--color-primary));
+    border-color: rgb(var(--color-primary) / 0.5);
+    background: rgb(var(--color-primary) / 0.05);
+  }
+  .el-icon {
+    font-size: 16px;
+  }
 }
 
 /* Sortable 拖拽占位 */

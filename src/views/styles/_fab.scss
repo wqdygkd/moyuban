@@ -8,6 +8,12 @@
   flex-direction: column;
   align-items: center;
   gap: var(--space-3);
+
+  /* 纵向堆叠时 EP 的相邻兄弟按钮规则（.el-button + .el-button { margin-left: 12px }）
+     会把第二个按钮顶离中轴；特异性 (0,3,0) 需压过 EP 的 (0,2,0) */
+  .el-button + .el-button {
+    margin-left: 0;
+  }
 }
 .fab-btn.el-button {
   width: 44px;
